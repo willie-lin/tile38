@@ -14,8 +14,6 @@ import (
 
 // MASSINSERT num_keys num_points [minx miny maxx maxy]
 
-const useRandField = true
-
 func randMassInsertPosition(minLat, minLon, maxLat, maxLon float64) (float64, float64) {
 	lat, lon := (rand.Float64()*(maxLat-minLat))+minLat, (rand.Float64()*(maxLon-minLon))+minLon
 	return lat, lon
@@ -100,16 +98,31 @@ func (c *Server) cmdMassInsert(msg *Message) (res resp.Value, err error) {
 			for j := 0; j < objs; j++ {
 				id := strconv.FormatInt(int64(j), 10)
 				var values []string
+				values = append(values, "set", key, id)
+				fvals := []float64{
+					1,            // one
+					0,            // zero
+					-1,           // negOne
+					14,           // nibble
+					20.5,         // tinyDiv10
+					120,          // int8
+					-120,         // int8
+					20000,        // int16
+					-20000,       // int16
+					214748300,    // int32
+					-214748300,   // int32
+					2014748300,   // float64
+					123.12312301, // float64
+				}
+				for i, fval := range fvals {
+					values = append(values, "FIELD",
+						fmt.Sprintf("fname:%d", i),
+						strconv.FormatFloat(fval, 'f', -1, 64))
+				}
 				if j%8 == 0 {
-					values = append(values, "set", key, id, "STRING", fmt.Sprintf("str%v", j))
+					values = append(values, "STRING", fmt.Sprintf("str%v", j))
 				} else {
 					lat, lon := randMassInsertPosition(minLat, minLon, maxLat, maxLon)
-					values = make([]string, 0, 16)
-					values = append(values, "set", key, id)
-					if useRandField {
-						values = append(values, "FIELD", "fname",
-							strconv.FormatFloat(rand.Float64()*10, 'f', -1, 64))
-					}
 					values = append(values, "POINT",
 						strconv.FormatFloat(lat, 'f', -1, 64),
 						strconv.FormatFloat(lon, 'f', -1, 64),
