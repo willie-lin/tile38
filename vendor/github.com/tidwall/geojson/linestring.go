@@ -46,7 +46,7 @@ func (g *LineString) AppendJSON(dst []byte) []byte {
 	dst = append(dst, `{"type":"LineString","coordinates":`...)
 	dst, _ = appendJSONSeries(dst, &g.base, g.extra, 0)
 	if g.extra != nil {
-		dst = g.extra.appendJSONExtra(dst)
+		dst = g.extra.appendJSONExtra(dst, false)
 	}
 	dst = append(dst, '}')
 	return dst
@@ -60,6 +60,11 @@ func (g *LineString) String() string {
 // JSON ...
 func (g *LineString) JSON() string {
 	return string(g.AppendJSON(nil))
+}
+
+// MarshalJSON ...
+func (g *LineString) MarshalJSON() ([]byte, error) {
+	return g.AppendJSON(nil), nil
 }
 
 // Spatial ...

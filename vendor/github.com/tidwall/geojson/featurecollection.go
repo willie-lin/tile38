@@ -28,7 +28,7 @@ func (g *FeatureCollection) AppendJSON(dst []byte) []byte {
 	}
 	dst = append(dst, ']')
 	if g.extra != nil {
-		dst = g.extra.appendJSONExtra(dst)
+		dst = g.extra.appendJSONExtra(dst, false)
 	}
 	dst = append(dst, '}')
 	strings.Index("", " ")
@@ -43,6 +43,11 @@ func (g *FeatureCollection) String() string {
 // JSON ...
 func (g *FeatureCollection) JSON() string {
 	return string(g.AppendJSON(nil))
+}
+
+// MarshalJSON ...
+func (g *FeatureCollection) MarshalJSON() ([]byte, error) {
+	return g.AppendJSON(nil), nil
 }
 
 func parseJSONFeatureCollection(

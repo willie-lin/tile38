@@ -106,7 +106,7 @@ func (server *Server) cmdSearchArgs(
 		fallthrough
 	case "circle":
 		if s.clip {
-			err = errInvalidArgument("cannnot clip with " + ltyp)
+			err = errInvalidArgument("cannot clip with " + ltyp)
 			return
 		}
 		var slat, slon, smeters string
@@ -158,7 +158,7 @@ func (server *Server) cmdSearchArgs(
 		s.obj = geojson.NewCircle(geometry.Point{X: lon, Y: lat}, meters, defaultCircleSteps)
 	case "object":
 		if s.clip {
-			err = errInvalidArgument("cannnot clip with object")
+			err = errInvalidArgument("cannot clip with object")
 			return
 		}
 		var obj string
@@ -272,7 +272,7 @@ func (server *Server) cmdSearchArgs(
 		})
 	case "get":
 		if s.clip {
-			err = errInvalidArgument("cannnot clip with get")
+			err = errInvalidArgument("cannot clip with get")
 		}
 		var key, id string
 		if vs, key, ok = tokenval(vs); !ok || key == "" {

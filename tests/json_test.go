@@ -30,7 +30,7 @@ func json_JSET_geojson_test(mc *mockServer) error {
 		{"JSET", "mykey", "myid1", "coordinates.1", 44}, {"OK"},
 		{"JGET", "mykey", "myid1"}, {`{"type":"Point","coordinates":[-115,44]}`},
 		{"SET", "mykey", "myid1", "OBJECT", `{"type":"Feature","geometry":{"type":"Point","coordinates":[-115,44]}}`}, {"OK"},
-		{"JGET", "mykey", "myid1"}, {`{"type":"Feature","geometry":{"type":"Point","coordinates":[-115,44]}}`},
+		{"JGET", "mykey", "myid1"}, {`{"type":"Feature","geometry":{"type":"Point","coordinates":[-115,44]},"properties":{}}`},
 		{"JGET", "mykey", "myid1", "geometry.type"}, {"Point"},
 		{"JSET", "mykey", "myid1", "properties.tags.-1", "southwest"}, {"OK"},
 		{"JSET", "mykey", "myid1", "properties.tags.-1", "united states"}, {"OK"},

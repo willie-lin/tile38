@@ -58,6 +58,11 @@ func (s String) JSON() string {
 	return string(s.AppendJSON(nil))
 }
 
+// MarshalJSON ...
+func (s String) MarshalJSON() ([]byte, error) {
+	return s.AppendJSON(nil), nil
+}
+
 // Within ...
 func (s String) Within(obj geojson.Object) bool {
 	return false

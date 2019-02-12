@@ -77,7 +77,7 @@ func (g *Feature) Members() string {
 func (g *Feature) AppendJSON(dst []byte) []byte {
 	dst = append(dst, `{"type":"Feature","geometry":`...)
 	dst = g.base.AppendJSON(dst)
-	dst = g.extra.appendJSONExtra(dst)
+	dst = g.extra.appendJSONExtra(dst, true)
 	dst = append(dst, '}')
 	return dst
 
@@ -91,6 +91,11 @@ func (g *Feature) String() string {
 // JSON ...
 func (g *Feature) JSON() string {
 	return string(g.AppendJSON(nil))
+}
+
+// MarshalJSON ...
+func (g *Feature) MarshalJSON() ([]byte, error) {
+	return g.AppendJSON(nil), nil
 }
 
 // Spatial ...

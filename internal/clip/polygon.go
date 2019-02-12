@@ -35,5 +35,5 @@ func clipPolygon(
 	if newPoly.Empty() {
 		return geojson.NewMultiPolygon(nil)
 	}
-	return polygon
+	return newPoly
 }

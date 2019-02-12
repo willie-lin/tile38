@@ -1785,5 +1785,256 @@
     "complexity": "O(1)",
     "since": "1.10.0",
     "group": "scripting"
+  },
+  "TEST":{
+    "summary": "Performs spatial test",
+    "complexity": "One test per command, complexity depends on the test",
+    "arguments": [
+      {
+        "name": "area1",
+        "enumargs": [
+          {
+            "name": "POINT",
+            "arguments": [
+              {
+                "name": "lat",
+                "type": "double"
+              },
+              {
+                "name": "lon",
+                "type": "double"
+              }
+            ]
+          },
+          {
+            "name": "GET",
+            "arguments": [
+              {
+                "name": "key",
+                "type": "string"
+              },
+              {
+                "name": "id",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "name": "BOUNDS",
+            "arguments":[
+              {
+                "name": "minlat",
+                "type": "double"
+              },
+              {
+                "name": "minlon",
+                "type": "double"
+              },
+              {
+                "name": "maxlat",
+                "type": "double"
+              },
+              {
+                "name": "maxlon",
+                "type": "double"
+              }
+            ]
+          },
+          {
+            "name": "OBJECT",
+            "arguments":[
+              {
+                "name": "geojson",
+                "type": "geojson"
+              }
+            ]
+          },
+          {
+            "name": "CIRCLE",
+            "arguments": [
+              {
+                "name": "lat",
+                "type": "double"
+              },
+              {
+                "name": "lon",
+                "type": "double"
+              },
+              {
+                "name": "meters",
+                "type": "double"
+              }
+            ]
+          },
+          {
+            "name": "TILE",
+            "arguments":[
+              {
+                "name": "x",
+                "type": "double"
+              },
+              {
+                "name": "y",
+                "type": "double"
+              },
+              {
+                "name": "z",
+                "type": "double"
+              }
+            ]
+          },
+          {
+            "name": "QUADKEY",
+            "arguments":[
+              {
+                "name": "quadkey",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "name": "HASH",
+            "arguments": [
+              {
+                "name": "geohash",
+                "type": "geohash"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "test",
+        "enumargs": [
+          {
+            "name": "INTERSECTS"
+          },
+          {
+            "name": "WITHIN"
+          }
+        ]
+      },
+      {
+        "command": "CLIP",
+        "name": [],
+        "type": [],
+        "optional": true
+      },
+      {
+        "name": "area2",
+        "enumargs": [
+          {
+            "name": "POINT",
+            "arguments": [
+              {
+                "name": "lat",
+                "type": "double"
+              },
+              {
+                "name": "lon",
+                "type": "double"
+              }
+            ]
+          },
+          {
+            "name": "GET",
+            "arguments": [
+              {
+                "name": "key",
+                "type": "string"
+              },
+              {
+                "name": "id",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "name": "BOUNDS",
+            "arguments":[
+              {
+                "name": "minlat",
+                "type": "double"
+              },
+              {
+                "name": "minlon",
+                "type": "double"
+              },
+              {
+                "name": "maxlat",
+                "type": "double"
+              },
+              {
+                "name": "maxlon",
+                "type": "double"
+              }
+            ]
+          },
+          {
+            "name": "OBJECT",
+            "arguments":[
+              {
+                "name": "geojson",
+                "type": "geojson"
+              }
+            ]
+          },
+          {
+            "name": "CIRCLE",
+            "arguments": [
+              {
+                "name": "lat",
+                "type": "double"
+              },
+              {
+                "name": "lon",
+                "type": "double"
+              },
+              {
+                "name": "meters",
+                "type": "double"
+              }
+            ]
+          },
+          {
+            "name": "TILE",
+            "arguments":[
+              {
+                "name": "x",
+                "type": "double"
+              },
+              {
+                "name": "y",
+                "type": "double"
+              },
+              {
+                "name": "z",
+                "type": "double"
+              }
+            ]
+          },
+          {
+            "name": "QUADKEY",
+            "arguments":[
+              {
+                "name": "quadkey",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "name": "HASH",
+            "arguments": [
+              {
+                "name": "geohash",
+                "type": "geohash"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "since": "1.16.0",
+    "group": "tests"
   }
 }

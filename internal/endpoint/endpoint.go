@@ -404,10 +404,15 @@ func parseEndpoint(s string) (Endpoint, error) {
 		// Parsing MQTT queue name
 		if len(sp) > 1 {
 			var err error
-			endpoint.MQTT.QueueName, err = url.QueryUnescape(sp[1])
-			if err != nil {
-				return endpoint, errors.New("invalid MQTT topic name")
+			var parts []string
+			for _, part := range sp[1:] {
+				part, err = url.QueryUnescape(part)
+				if err != nil {
+					return endpoint, errors.New("invalid MQTT topic name")
+				}
+				parts = append(parts, part)
 			}
+			endpoint.MQTT.QueueName = strings.Join(parts, "/")
 		}
 
 		// Parsing additional params

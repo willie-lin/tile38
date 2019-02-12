@@ -30,7 +30,7 @@ func (g *MultiLineString) AppendJSON(dst []byte) []byte {
 	}
 	dst = append(dst, ']')
 	if g.extra != nil {
-		dst = g.extra.appendJSONExtra(dst)
+		dst = g.extra.appendJSONExtra(dst, false)
 	}
 	dst = append(dst, '}')
 	return dst
@@ -56,6 +56,11 @@ func (g *MultiLineString) Valid() bool {
 // JSON ...
 func (g *MultiLineString) JSON() string {
 	return string(g.AppendJSON(nil))
+}
+
+// MarshalJSON ...
+func (g *MultiLineString) MarshalJSON() ([]byte, error) {
+	return g.AppendJSON(nil), nil
 }
 
 func parseJSONMultiLineString(

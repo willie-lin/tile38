@@ -30,7 +30,7 @@ func (g *MultiPoint) AppendJSON(dst []byte) []byte {
 	}
 	dst = append(dst, ']')
 	if g.extra != nil {
-		dst = g.extra.appendJSONExtra(dst)
+		dst = g.extra.appendJSONExtra(dst, false)
 	}
 	dst = append(dst, '}')
 	return dst
@@ -44,6 +44,11 @@ func (g *MultiPoint) String() string {
 // JSON ...
 func (g *MultiPoint) JSON() string {
 	return string(g.AppendJSON(nil))
+}
+
+// MarshalJSON ...
+func (g *MultiPoint) MarshalJSON() ([]byte, error) {
+	return g.AppendJSON(nil), nil
 }
 
 func parseJSONMultiPoint(keys *parseKeys, opts *ParseOptions) (Object, error) {

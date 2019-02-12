@@ -43,6 +43,7 @@ type Object interface {
 	NumPoints() int
 	ForEach(iter func(geom Object) bool) bool
 	Spatial() Spatial
+	MarshalJSON() ([]byte, error)
 }
 
 var _ = []Object{
@@ -88,7 +89,7 @@ type ParseOptions struct {
 	// IndexGeometryKind is the kind of index implementation.
 	// Default is QuadTreeCompressed
 	IndexGeometryKind geometry.IndexKind
-	RequireValid       bool
+	RequireValid      bool
 }
 
 // DefaultParseOptions ...
@@ -96,7 +97,7 @@ var DefaultParseOptions = &ParseOptions{
 	IndexChildren:     64,
 	IndexGeometry:     64,
 	IndexGeometryKind: geometry.QuadTree,
-	RequireValid:       false,
+	RequireValid:      false,
 }
 
 // Parse a GeoJSON object
@@ -244,10 +245,17 @@ func appendJSONPoint(dst []byte, point geometry.Point, ex *extra, idx int) []byt
 	return dst
 }
 
-func (ex *extra) appendJSONExtra(dst []byte) []byte {
+func (ex *extra) appendJSONExtra(dst []byte, propertiesRequired bool) []byte {
 	if ex != nil && ex.members != "" {
 		dst = append(dst, ',')
 		dst = append(dst, ex.members[1:len(ex.members)-1]...)
+		if propertiesRequired {
+			if !gjson.Get(ex.members, "properties").Exists() {
+				dst = append(dst, `,"properties":{}`...)
+			}
+		}
+	} else if propertiesRequired {
+		dst = append(dst, `,"properties":{}`...)
 	}
 
 	return dst

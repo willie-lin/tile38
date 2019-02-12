@@ -28,7 +28,7 @@ func (g *GeometryCollection) AppendJSON(dst []byte) []byte {
 	}
 	dst = append(dst, ']')
 	if g.extra != nil {
-		dst = g.extra.appendJSONExtra(dst)
+		dst = g.extra.appendJSONExtra(dst, false)
 	}
 	dst = append(dst, '}')
 	strings.Index("", " ")
@@ -43,6 +43,11 @@ func (g *GeometryCollection) String() string {
 // JSON ...
 func (g *GeometryCollection) JSON() string {
 	return string(g.AppendJSON(nil))
+}
+
+// MarshalJSON ...
+func (g *GeometryCollection) MarshalJSON() ([]byte, error) {
+	return g.AppendJSON(nil), nil
 }
 
 func parseJSONGeometryCollection(

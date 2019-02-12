@@ -63,7 +63,7 @@ func (g *Point) Base() geometry.Point {
 func (g *Point) AppendJSON(dst []byte) []byte {
 	dst = append(dst, `{"type":"Point","coordinates":`...)
 	dst = appendJSONPoint(dst, g.base, g.extra, 0)
-	dst = g.extra.appendJSONExtra(dst)
+	dst = g.extra.appendJSONExtra(dst, false)
 	dst = append(dst, '}')
 	return dst
 }
@@ -71,6 +71,11 @@ func (g *Point) AppendJSON(dst []byte) []byte {
 // JSON ...
 func (g *Point) JSON() string {
 	return string(g.AppendJSON(nil))
+}
+
+// MarshalJSON ...
+func (g *Point) MarshalJSON() ([]byte, error) {
+	return g.AppendJSON(nil), nil
 }
 
 // String ...

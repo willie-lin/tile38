@@ -52,7 +52,7 @@ func (g *Polygon) AppendJSON(dst []byte) []byte {
 	}
 	dst = append(dst, ']')
 	if g.extra != nil {
-		dst = g.extra.appendJSONExtra(dst)
+		dst = g.extra.appendJSONExtra(dst, false)
 	}
 	dst = append(dst, '}')
 	return dst
@@ -61,6 +61,11 @@ func (g *Polygon) AppendJSON(dst []byte) []byte {
 // JSON ...
 func (g *Polygon) JSON() string {
 	return string(g.AppendJSON(nil))
+}
+
+// MarshalJSON ...
+func (g *Polygon) MarshalJSON() ([]byte, error) {
+	return g.AppendJSON(nil), nil
 }
 
 // String ...

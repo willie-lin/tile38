@@ -1203,6 +1203,8 @@ func (server *Server) command(msg *Message, client *Client) (
 		res, err = server.cmdPsubscribe(msg)
 	case "publish":
 		res, err = server.cmdPublish(msg)
+	case "test":
+		res, err = server.cmdTest(msg)
 	}
 	return
 }

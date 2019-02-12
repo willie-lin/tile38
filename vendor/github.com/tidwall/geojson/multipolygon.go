@@ -30,7 +30,7 @@ func (g *MultiPolygon) AppendJSON(dst []byte) []byte {
 	}
 	dst = append(dst, ']')
 	if g.extra != nil {
-		dst = g.extra.appendJSONExtra(dst)
+		dst = g.extra.appendJSONExtra(dst, false)
 	}
 	dst = append(dst, '}')
 	return dst
@@ -55,6 +55,11 @@ func (g *MultiPolygon) Valid() bool {
 // JSON ...
 func (g *MultiPolygon) JSON() string {
 	return string(g.AppendJSON(nil))
+}
+
+// MarshalJSON ...
+func (g *MultiPolygon) MarshalJSON() ([]byte, error) {
+	return g.AppendJSON(nil), nil
 }
 
 func parseJSONMultiPolygon(
