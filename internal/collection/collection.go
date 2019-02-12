@@ -1,12 +1,14 @@
 package collection
 
 import (
+	"unsafe"
+
 	"github.com/tidwall/boxtree/d2"
 	"github.com/tidwall/btree"
 	"github.com/tidwall/geojson"
 	"github.com/tidwall/geojson/geo"
 	"github.com/tidwall/geojson/geometry"
-	"github.com/tidwall/tinybtree"
+	"github.com/tidwall/tile38/internal/collection/ptrbtree"
 )
 
 // Cursor allows for quickly paging through Scan, Within, Intersects, and Nearby
@@ -47,9 +49,9 @@ func (item *itemT) Less(other btree.Item, ctx interface{}) bool {
 
 // Collection represents a collection of geojson objects.
 type Collection struct {
-	items    tinybtree.BTree // items sorted by keys
-	index    d2.BoxTree      // items geospatially indexed
-	values   *btree.BTree    // items sorted by value+key
+	items    ptrbtree.BTree // items sorted by keys
+	index    d2.BoxTree     // items geospatially indexed
+	values   *btree.BTree   // items sorted by value+key
 	fieldMap map[string]int
 	weight   int
 	points   int
@@ -161,9 +163,9 @@ func (c *Collection) Set(
 	newItem := &itemT{id: id, obj: obj}
 
 	// add the new item to main btree and remove the old one if needed
-	oldItemV, ok := c.items.Set(id, newItem)
+	oldItemV, ok := c.items.Set(unsafe.Pointer(newItem))
 	if ok {
-		oldItem := oldItemV.(*itemT)
+		oldItem := (*itemT)(oldItemV)
 
 		// remove old item from indexes
 		c.delItem(oldItem)
@@ -206,7 +208,7 @@ func (c *Collection) Delete(id string) (
 	if !ok {
 		return nil, nil, false
 	}
-	oldItem := oldItemV.(*itemT)
+	oldItem := (*itemT)(oldItemV)
 
 	c.delItem(oldItem)
 
@@ -222,7 +224,7 @@ func (c *Collection) Get(id string) (
 	if !ok {
 		return nil, nil, false
 	}
-	item := itemV.(*itemT)
+	item := (*itemT)(itemV)
 
 	return item.obj, item.fields, true
 }
@@ -236,7 +238,7 @@ func (c *Collection) SetField(id, fieldName string, fieldValue float64) (
 	if !ok {
 		return nil, nil, false, false
 	}
-	item := itemV.(*itemT)
+	item := (*itemT)(itemV)
 	updated = c.setField(item, fieldName, fieldValue, true)
 	return item.obj, item.fields, updated, true
 }
@@ -277,7 +279,7 @@ func (c *Collection) SetFields(
 	if !ok {
 		return nil, nil, 0, false
 	}
-	item := itemV.(*itemT)
+	item := (*itemT)(itemV)
 
 	updatedCount = c.setFields(item, fieldNames, fieldValues, true)
 
@@ -325,7 +327,7 @@ func (c *Collection) Scan(desc bool, cursor Cursor,
 		offset = cursor.Offset()
 		cursor.Step(offset)
 	}
-	iter := func(key string, value interface{}) bool {
+	iter := func(ptr unsafe.Pointer) bool {
 		count++
 		if count <= offset {
 			return true
@@ -333,7 +335,7 @@ func (c *Collection) Scan(desc bool, cursor Cursor,
 		if cursor != nil {
 			cursor.Step(1)
 		}
-		iitm := value.(*itemT)
+		iitm := (*itemT)(ptr)
 		keepon = iterator(iitm.id, iitm.obj, iitm.fields)
 		return keepon
 	}
@@ -356,7 +358,7 @@ func (c *Collection) ScanRange(start, end string, desc bool, cursor Cursor,
 		offset = cursor.Offset()
 		cursor.Step(offset)
 	}
-	iter := func(key string, value interface{}) bool {
+	iter := func(ptr unsafe.Pointer) bool {
 		count++
 		if count <= offset {
 			return true
@@ -364,16 +366,16 @@ func (c *Collection) ScanRange(start, end string, desc bool, cursor Cursor,
 		if cursor != nil {
 			cursor.Step(1)
 		}
+		iitm := (*itemT)(ptr)
 		if !desc {
-			if key >= end {
+			if iitm.id >= end {
 				return false
 			}
 		} else {
-			if key <= end {
+			if iitm.id <= end {
 				return false
 			}
 		}
-		iitm := value.(*itemT)
 		keepon = iterator(iitm.id, iitm.obj, iitm.fields)
 		return keepon
 	}
@@ -463,7 +465,7 @@ func (c *Collection) ScanGreaterOrEqual(id string, desc bool,
 		offset = cursor.Offset()
 		cursor.Step(offset)
 	}
-	iter := func(key string, value interface{}) bool {
+	iter := func(ptr unsafe.Pointer) bool {
 		count++
 		if count <= offset {
 			return true
@@ -471,7 +473,7 @@ func (c *Collection) ScanGreaterOrEqual(id string, desc bool,
 		if cursor != nil {
 			cursor.Step(1)
 		}
-		iitm := value.(*itemT)
+		iitm := (*itemT)(ptr)
 		keepon = iterator(iitm.id, iitm.obj, iitm.fields)
 		return keepon
 	}
