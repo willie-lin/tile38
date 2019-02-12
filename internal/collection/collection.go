@@ -1,14 +1,15 @@
 package collection
 
 import (
+	"reflect"
 	"unsafe"
 
-	"github.com/tidwall/boxtree/d2"
 	"github.com/tidwall/btree"
 	"github.com/tidwall/geojson"
 	"github.com/tidwall/geojson/geo"
 	"github.com/tidwall/geojson/geometry"
 	"github.com/tidwall/tile38/internal/collection/ptrbtree"
+	"github.com/tidwall/tile38/internal/collection/ptrrtree"
 )
 
 // Cursor allows for quickly paging through Scan, Within, Intersects, and Nearby
@@ -18,9 +19,30 @@ type Cursor interface {
 }
 
 type itemT struct {
-	id     string
 	obj    geojson.Object
+	_      uint32
+	idLen  uint32
+	idData unsafe.Pointer
 	fields []float64
+}
+
+func (item *itemT) id() string {
+	return *(*string)((unsafe.Pointer)(&reflect.StringHeader{
+		Data: uintptr(unsafe.Pointer(item.idData)),
+		Len:  int(item.idLen),
+	}))
+}
+
+func newItem(id string, obj geojson.Object) *itemT {
+	item := new(itemT)
+	item.obj = obj
+	item.idLen = uint32(len(id))
+	if len(id) > 0 {
+		idData := make([]byte, len(id))
+		copy(idData, id)
+		item.idData = unsafe.Pointer(&idData[0])
+	}
+	return item
 }
 
 func (item *itemT) weightAndPoints() (weight, points int) {
@@ -30,7 +52,7 @@ func (item *itemT) weightAndPoints() (weight, points int) {
 	} else {
 		weight = len(item.obj.String())
 	}
-	weight += len(item.fields)*8 + len(item.id)
+	weight += len(item.fields)*8 + len(item.id())
 	return weight, points
 }
 
@@ -44,14 +66,14 @@ func (item *itemT) Less(other btree.Item, ctx interface{}) bool {
 		return false
 	}
 	// the values match so we'll compare IDs, which are always unique.
-	return item.id < other.(*itemT).id
+	return item.id() < other.(*itemT).id()
 }
 
 // Collection represents a collection of geojson objects.
 type Collection struct {
-	items    ptrbtree.BTree // items sorted by keys
-	index    d2.BoxTree     // items geospatially indexed
-	values   *btree.BTree   // items sorted by value+key
+	items    ptrbtree.BTree   // items sorted by keys
+	index    ptrrtree.BoxTree // items geospatially indexed
+	values   *btree.BTree     // items sorted by value+key
 	fieldMap map[string]int
 	weight   int
 	points   int
@@ -110,7 +132,7 @@ func (c *Collection) indexDelete(item *itemT) {
 		c.index.Delete(
 			[]float64{rect.Min.X, rect.Min.Y},
 			[]float64{rect.Max.X, rect.Max.Y},
-			item)
+			unsafe.Pointer(item))
 	}
 }
 
@@ -120,7 +142,7 @@ func (c *Collection) indexInsert(item *itemT) {
 		c.index.Insert(
 			[]float64{rect.Min.X, rect.Min.Y},
 			[]float64{rect.Max.X, rect.Max.Y},
-			item)
+			unsafe.Pointer(item))
 	}
 }
 
@@ -160,7 +182,7 @@ func (c *Collection) Set(
 ) (
 	oldObject geojson.Object, oldFields []float64, newFields []float64,
 ) {
-	newItem := &itemT{id: id, obj: obj}
+	newItem := newItem(id, obj)
 
 	// add the new item to main btree and remove the old one if needed
 	oldItemV, ok := c.items.Set(unsafe.Pointer(newItem))
@@ -336,7 +358,7 @@ func (c *Collection) Scan(desc bool, cursor Cursor,
 			cursor.Step(1)
 		}
 		iitm := (*itemT)(ptr)
-		keepon = iterator(iitm.id, iitm.obj, iitm.fields)
+		keepon = iterator(iitm.id(), iitm.obj, iitm.fields)
 		return keepon
 	}
 	if desc {
@@ -368,15 +390,15 @@ func (c *Collection) ScanRange(start, end string, desc bool, cursor Cursor,
 		}
 		iitm := (*itemT)(ptr)
 		if !desc {
-			if iitm.id >= end {
+			if iitm.id() >= end {
 				return false
 			}
 		} else {
-			if iitm.id <= end {
+			if iitm.id() <= end {
 				return false
 			}
 		}
-		keepon = iterator(iitm.id, iitm.obj, iitm.fields)
+		keepon = iterator(iitm.id(), iitm.obj, iitm.fields)
 		return keepon
 	}
 
@@ -408,7 +430,7 @@ func (c *Collection) SearchValues(desc bool, cursor Cursor,
 			cursor.Step(1)
 		}
 		iitm := item.(*itemT)
-		keepon = iterator(iitm.id, iitm.obj, iitm.fields)
+		keepon = iterator(iitm.id(), iitm.obj, iitm.fields)
 		return keepon
 	}
 	if desc {
@@ -440,15 +462,17 @@ func (c *Collection) SearchValuesRange(start, end string, desc bool,
 			cursor.Step(1)
 		}
 		iitm := item.(*itemT)
-		keepon = iterator(iitm.id, iitm.obj, iitm.fields)
+		keepon = iterator(iitm.id(), iitm.obj, iitm.fields)
 		return keepon
 	}
 	if desc {
-		c.values.DescendRange(&itemT{obj: String(start)},
-			&itemT{obj: String(end)}, iter)
+		c.values.DescendRange(
+			newItem("", String(start)), newItem("", String(end)), iter,
+		)
 	} else {
-		c.values.AscendRange(&itemT{obj: String(start)},
-			&itemT{obj: String(end)}, iter)
+		c.values.AscendRange(
+			newItem("", String(start)), newItem("", String(end)), iter,
+		)
 	}
 	return keepon
 }
@@ -474,7 +498,7 @@ func (c *Collection) ScanGreaterOrEqual(id string, desc bool,
 			cursor.Step(1)
 		}
 		iitm := (*itemT)(ptr)
-		keepon = iterator(iitm.id, iitm.obj, iitm.fields)
+		keepon = iterator(iitm.id(), iitm.obj, iitm.fields)
 		return keepon
 	}
 	if desc {
@@ -493,9 +517,9 @@ func (c *Collection) geoSearch(
 	c.index.Search(
 		[]float64{rect.Min.X, rect.Min.Y},
 		[]float64{rect.Max.X, rect.Max.Y},
-		func(_, _ []float64, itemv interface{}) bool {
-			item := itemv.(*itemT)
-			alive = iter(item.id, item.obj, item.fields)
+		func(_, _ []float64, itemv unsafe.Pointer) bool {
+			item := (*itemT)(itemv)
+			alive = iter(item.id(), item.obj, item.fields)
 			return alive
 		},
 	)
@@ -688,7 +712,7 @@ func (c *Collection) Nearby(
 			c.index.Search(
 				[]float64{minLon, minLat},
 				[]float64{maxLon, maxLat},
-				func(_, _ []float64, itemv interface{}) bool {
+				func(_, _ []float64, itemv unsafe.Pointer) bool {
 					exists = true
 					return false
 				},
@@ -711,7 +735,7 @@ func (c *Collection) Nearby(
 	c.index.Nearby(
 		[]float64{center.X, center.Y},
 		[]float64{center.X, center.Y},
-		func(_, _ []float64, itemv interface{}) bool {
+		func(_, _ []float64, itemv unsafe.Pointer) bool {
 			count++
 			if count <= offset {
 				return true
@@ -719,8 +743,8 @@ func (c *Collection) Nearby(
 			if cursor != nil {
 				cursor.Step(1)
 			}
-			item := itemv.(*itemT)
-			alive = iter(item.id, item.obj, item.fields)
+			item := (*itemT)(itemv)
+			alive = iter(item.id(), item.obj, item.fields)
 			return alive
 		},
 	)

@@ -1,20 +1,36 @@
 package ptrbtree
 
-import "unsafe"
+import (
+	"reflect"
+	"unsafe"
+)
 
 const maxItems = 31 // use an odd number
 const minItems = maxItems * 40 / 100
 
-type item struct{ ptr unsafe.Pointer }
-type keyedItem struct{ key string }
+type btreeItem struct {
+	ptr unsafe.Pointer
+}
 
-func (v item) key() string {
-	return (*keyedItem)(v.ptr).key
+// keyedItem must match layout of ../collection/itemT, otherwise
+// there's a risk for memory corruption.
+type keyedItem struct {
+	_      interface{}
+	_      uint32
+	keyLen uint32
+	data   unsafe.Pointer
+}
+
+func (v btreeItem) key() string {
+	return *(*string)((unsafe.Pointer)(&reflect.StringHeader{
+		Data: uintptr(unsafe.Pointer((*keyedItem)(v.ptr).data)),
+		Len:  int((*keyedItem)(v.ptr).keyLen),
+	}))
 }
 
 type node struct {
 	numItems int
-	items    [maxItems]item
+	items    [maxItems]btreeItem
 	children [maxItems + 1]*node
 }
 
@@ -44,7 +60,7 @@ func (n *node) find(key string) (index int, found bool) {
 
 // Set or replace a value for a key
 func (tr *BTree) Set(ptr unsafe.Pointer) (prev unsafe.Pointer, replaced bool) {
-	newItem := item{ptr}
+	newItem := btreeItem{ptr}
 	if tr.root == nil {
 		tr.root = new(node)
 		tr.root.items[0] = newItem
@@ -70,7 +86,7 @@ func (tr *BTree) Set(ptr unsafe.Pointer) (prev unsafe.Pointer, replaced bool) {
 	return
 }
 
-func (n *node) split(height int) (right *node, median item) {
+func (n *node) split(height int) (right *node, median btreeItem) {
 	right = new(node)
 	median = n.items[maxItems/2]
 	copy(right.items[:maxItems/2], n.items[maxItems/2+1:])
@@ -84,13 +100,13 @@ func (n *node) split(height int) (right *node, median item) {
 		}
 	}
 	for i := maxItems / 2; i < maxItems; i++ {
-		n.items[i] = item{}
+		n.items[i] = btreeItem{}
 	}
 	n.numItems = maxItems / 2
 	return
 }
 
-func (n *node) set(newItem item, height int) (prev unsafe.Pointer, replaced bool) {
+func (n *node) set(newItem btreeItem, height int) (prev unsafe.Pointer, replaced bool) {
 	i, found := n.find(newItem.key())
 	if found {
 		prev = n.items[i].ptr
@@ -176,7 +192,7 @@ func (tr *BTree) Delete(key string) (prev unsafe.Pointer, deleted bool) {
 	if tr.root == nil {
 		return
 	}
-	var prevItem item
+	var prevItem btreeItem
 	prevItem, deleted = tr.root.delete(false, key, tr.height)
 	if !deleted {
 		return
@@ -195,7 +211,7 @@ func (tr *BTree) Delete(key string) (prev unsafe.Pointer, deleted bool) {
 }
 
 func (n *node) delete(max bool, key string, height int) (
-	prev item, deleted bool,
+	prev btreeItem, deleted bool,
 ) {
 	i, found := 0, false
 	if max {
@@ -208,12 +224,12 @@ func (n *node) delete(max bool, key string, height int) (
 			prev = n.items[i]
 			// found the items at the leaf, remove it and return.
 			copy(n.items[i:], n.items[i+1:n.numItems])
-			n.items[n.numItems-1] = item{}
+			n.items[n.numItems-1] = btreeItem{}
 			n.children[n.numItems] = nil
 			n.numItems--
 			return prev, true
 		}
-		return item{}, false
+		return btreeItem{}, false
 	}
 
 	if found {
@@ -237,7 +253,7 @@ func (n *node) delete(max bool, key string, height int) (
 			i--
 		}
 		if n.children[i].numItems+n.children[i+1].numItems+1 < maxItems {
-			// merge left + item + right
+			// merge left + btreeItem + right
 			n.children[i].items[n.children[i].numItems] = n.items[i]
 			copy(n.children[i].items[n.children[i].numItems+1:],
 				n.children[i+1].items[:n.children[i+1].numItems])
@@ -248,7 +264,7 @@ func (n *node) delete(max bool, key string, height int) (
 			n.children[i].numItems += n.children[i+1].numItems + 1
 			copy(n.items[i:], n.items[i+1:n.numItems])
 			copy(n.children[i+1:], n.children[i+2:n.numItems+1])
-			n.items[n.numItems] = item{}
+			n.items[n.numItems] = btreeItem{}
 			n.children[n.numItems+1] = nil
 			n.numItems--
 		} else if n.children[i].numItems > n.children[i+1].numItems {
@@ -266,7 +282,7 @@ func (n *node) delete(max bool, key string, height int) (
 			}
 			n.children[i+1].numItems++
 			n.items[i] = n.children[i].items[n.children[i].numItems-1]
-			n.children[i].items[n.children[i].numItems-1] = item{}
+			n.children[i].items[n.children[i].numItems-1] = btreeItem{}
 			if height > 1 {
 				n.children[i].children[n.children[i].numItems] = nil
 			}
