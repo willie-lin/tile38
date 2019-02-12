@@ -38,55 +38,55 @@ func bounds(c *Collection) geometry.Rect {
 	}
 }
 
-func TestStuff(t *testing.T) {
-	c := New()
-	key := "str"
-	str1 := String("hello")
-	str2 := String("jello")
-	{
-		println("A")
-		oldObj, _, _ := c.Set(key, str1, []string{"a", "b", "c"}, nil)
-		println("B")
-		expect(t, oldObj == nil)
-	}
-	{
-		println("C")
-		oldObj, _, _ := c.Set(key, str2, nil, nil) //[]float64{4, 5, 6})
-		println("D")
-		expect(t, oldObj == str1)
-		// expect(t, reflect.DeepEqual(oldFlds, nil)) //[]float64{1, 2, 3}))
-		// expect(t, reflect.DeepEqual(newFlds, []float64{1, 2, 3, 4, 5, 6}))
-	}
-	{
-		// fValues := []float64{7, 8, 9, 10, 11, 12}
-		println("E")
-		oldObj, _, _ := c.Set(key, str1, nil, nil)
-		println("F")
-		expect(t, oldObj == str2)
-		// expect(t, reflect.DeepEqual(oldFlds, []float64{4, 5, 6}))
-		// expect(t, reflect.DeepEqual(newFlds, []float64{7, 8, 9, 10, 11, 12}))
-	}
+// func TestStuff(t *testing.T) {
+// 	c := New()
+// 	key := "str"
+// 	str1 := String("hello")
+// 	str2 := String("jello")
+// 	{
+// 		println("A")
+// 		oldObj, _, _ := c.Set(key, str1, []string{"a", "b", "c"}, nil)
+// 		println("B")
+// 		expect(t, oldObj == nil)
+// 	}
+// 	{
+// 		println("C")
+// 		oldObj, _, _ := c.Set(key, str2, nil, nil) //[]float64{4, 5, 6})
+// 		println("D")
+// 		expect(t, oldObj == str1)
+// 		// expect(t, reflect.DeepEqual(oldFlds, nil)) //[]float64{1, 2, 3}))
+// 		// expect(t, reflect.DeepEqual(newFlds, []float64{1, 2, 3, 4, 5, 6}))
+// 	}
+// 	{
+// 		// fValues := []float64{7, 8, 9, 10, 11, 12}
+// 		println("E")
+// 		oldObj, _, _ := c.Set(key, str1, nil, nil)
+// 		println("F")
+// 		expect(t, oldObj == str2)
+// 		// expect(t, reflect.DeepEqual(oldFlds, []float64{4, 5, 6}))
+// 		// expect(t, reflect.DeepEqual(newFlds, []float64{7, 8, 9, 10, 11, 12}))
+// 	}
 
-	// var old geojson.Object
-	// c := New()
-	// old, _, _ = c.Set("hello1", String("world1"), nil, nil)
-	// expect(t, old == nil)
-	// old, _, _ = c.Set("hello2", String("world2"), nil, nil)
-	// expect(t, old == nil)
-	// old, _, _ = c.Set("hello3", String("world3"), nil, nil)
-	// expect(t, old == nil)
-	// old, _, _ = c.Set("hello4", String("world4"), nil, nil)
-	// expect(t, old == nil)
+// 	// var old geojson.Object
+// 	// c := New()
+// 	// old, _, _ = c.Set("hello1", String("world1"), nil, nil)
+// 	// expect(t, old == nil)
+// 	// old, _, _ = c.Set("hello2", String("world2"), nil, nil)
+// 	// expect(t, old == nil)
+// 	// old, _, _ = c.Set("hello3", String("world3"), nil, nil)
+// 	// expect(t, old == nil)
+// 	// old, _, _ = c.Set("hello4", String("world4"), nil, nil)
+// 	// expect(t, old == nil)
 
-	// old, _, _ = c.Set("hello1", String("planet1"), nil, nil)
-	// expect(t, old == String("world1"))
-	// old, _, _ = c.Set("hello2", String("planet2"), nil, nil)
-	// expect(t, old == String("world2"))
-	// old, _, _ = c.Set("hello3", String("planet3"), nil, nil)
-	// expect(t, old == String("world3"))
-	// old, _, _ = c.Set("hello4", String("planet4"), nil, nil)
-	// expect(t, old == String("world4"))
-}
+// 	// old, _, _ = c.Set("hello1", String("planet1"), nil, nil)
+// 	// expect(t, old == String("world1"))
+// 	// old, _, _ = c.Set("hello2", String("planet2"), nil, nil)
+// 	// expect(t, old == String("world2"))
+// 	// old, _, _ = c.Set("hello3", String("planet3"), nil, nil)
+// 	// expect(t, old == String("world3"))
+// 	// old, _, _ = c.Set("hello4", String("planet4"), nil, nil)
+// 	// expect(t, old == String("world4"))
+// }
 
 func TestCollectionNewCollection(t *testing.T) {
 	const numItems = 10000
@@ -168,9 +168,7 @@ func TestCollectionSet(t *testing.T) {
 		{
 			fNames := []string{"a", "b", "c"}
 			fValues := []float64{1, 2, 3}
-			println("A")
 			oldObj, oldFlds, newFlds := c.Set("str", str1, fNames, fValues)
-			println("B")
 			expect(t, oldObj == nil)
 			expect(t, len(oldFlds) == 0)
 			expect(t, reflect.DeepEqual(newFlds, fValues))
@@ -178,18 +176,14 @@ func TestCollectionSet(t *testing.T) {
 		{
 			fNames := []string{"d", "e", "f"}
 			fValues := []float64{4, 5, 6}
-			println("C")
 			oldObj, oldFlds, newFlds := c.Set("str", str2, fNames, fValues)
-			println("D")
 			expect(t, oldObj == str1)
 			expect(t, reflect.DeepEqual(oldFlds, []float64{1, 2, 3}))
 			expect(t, reflect.DeepEqual(newFlds, []float64{1, 2, 3, 4, 5, 6}))
 		}
 		{
 			fValues := []float64{7, 8, 9, 10, 11, 12}
-			println("E")
 			oldObj, oldFlds, newFlds := c.Set("str", str1, nil, fValues)
-			println("F")
 			expect(t, oldObj == str2)
 			expect(t, reflect.DeepEqual(oldFlds, []float64{1, 2, 3, 4, 5, 6}))
 			expect(t, reflect.DeepEqual(newFlds, []float64{7, 8, 9, 10, 11, 12}))

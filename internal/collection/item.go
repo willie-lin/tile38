@@ -10,21 +10,21 @@ import (
 
 type itemT struct {
 	obj       geojson.Object
-	idLen     uint32 // id block size in bytes
 	fieldsLen uint32 // fields block size in bytes, not num of fields
+	idLen     uint32 // id block size in bytes
 	data      unsafe.Pointer
 }
 
 func (item *itemT) id() string {
 	return *(*string)((unsafe.Pointer)(&reflect.StringHeader{
-		Data: uintptr(unsafe.Pointer(item.data)),
+		Data: uintptr(unsafe.Pointer(item.data)) + uintptr(item.fieldsLen),
 		Len:  int(item.idLen),
 	}))
 }
 
 func (item *itemT) fields() []float64 {
 	return *(*[]float64)((unsafe.Pointer)(&reflect.SliceHeader{
-		Data: uintptr(unsafe.Pointer(item.data)) + uintptr(item.idLen),
+		Data: uintptr(unsafe.Pointer(item.data)),
 		Len:  int(item.fieldsLen) / 8,
 		Cap:  int(item.fieldsLen) / 8,
 	}))
@@ -74,15 +74,24 @@ func (item *itemT) Less(other btree.Item, ctx interface{}) bool {
 	return item.id() < other.(*itemT).id()
 }
 
-// directSetFields copies fields, overwriting previous fields
-func (item *itemT) directSetFields(fields []float64) {
-	n := int(item.idLen) + len(fields)*8
-	item.fieldsLen = uint32(len(fields) * 8)
-	if n > 0 {
-		newData := make([]byte, int(item.idLen)+len(fields)*8)
+func floatsToBytes(f []float64) []byte {
+	return *(*[]byte)((unsafe.Pointer)(&reflect.SliceHeader{
+		Data: ((*reflect.SliceHeader)(unsafe.Pointer(&f))).Data,
+		Len:  len(f) * 8,
+		Cap:  len(f) * 8,
+	}))
+}
+
+// directCopyFields copies fields, overwriting previous fields
+func (item *itemT) directCopyFields(fields []float64) {
+	fieldBytes := floatsToBytes(fields)
+	oldData := item.dataBytes()
+	newData := make([]byte, len(fieldBytes)+int(item.idLen))
+	copy(newData, fieldBytes)
+	copy(newData[len(fieldBytes):], oldData[item.fieldsLen:])
+	item.fieldsLen = uint32(len(fieldBytes))
+	if len(newData) > 0 {
 		item.data = unsafe.Pointer(&newData[0])
-		copy(newData, item.id())
-		copy(item.fields(), fields)
 	} else {
 		item.data = nil
 	}
@@ -100,19 +109,19 @@ func (c *Collection) setField(
 	if idx >= len(itemFields) {
 		// make room for new field
 
+		itemBytes := item.dataBytes()
 		oldLen := len(itemFields)
-		// print(c.weight)
-		data := make([]byte, int(item.idLen)+(idx+1)*8)
-		copy(data, item.dataBytes())
+		data := make([]byte, (idx+1)*8+int(item.idLen))
+
+		copy(data, itemBytes[:item.fieldsLen])
+		copy(data[(idx+1)*8:], itemBytes[item.fieldsLen:])
 		item.fieldsLen = uint32((idx + 1) * 8)
 		item.data = unsafe.Pointer(&data[0])
+
 		itemFields := item.fields()
 		if updateWeight {
 			c.weight += (len(itemFields) - oldLen) * 8
 		}
-		// print(":")
-		// print(c.weight)
-		// println()
 		itemFields[idx] = fieldValue
 		updated = true
 	} else if itemFields[idx] != fieldValue {

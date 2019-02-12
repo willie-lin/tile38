@@ -15,16 +15,17 @@ type btreeItem struct {
 // keyedItem must match layout of ../collection/itemT, otherwise
 // there's a risk for memory corruption.
 type keyedItem struct {
-	obj    interface{}
-	keyLen uint32
-	_      uint32
-	data   unsafe.Pointer
+	obj      interface{}
+	fieldLen uint32
+	keyLen   uint32
+	data     unsafe.Pointer
 }
 
 func (v btreeItem) key() string {
 	return *(*string)((unsafe.Pointer)(&reflect.StringHeader{
-		Data: uintptr(unsafe.Pointer((*keyedItem)(v.ptr).data)),
-		Len:  int((*keyedItem)(v.ptr).keyLen),
+		Data: uintptr(unsafe.Pointer((*keyedItem)(v.ptr).data)) +
+			uintptr((*keyedItem)(v.ptr).fieldLen),
+		Len: int((*keyedItem)(v.ptr).keyLen),
 	}))
 }
 

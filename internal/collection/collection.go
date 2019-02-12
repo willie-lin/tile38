@@ -141,17 +141,16 @@ func (c *Collection) Set(
 
 		// remove old item from indexes
 		c.delItem(oldItem)
-
 		if len(oldItem.fields()) > 0 {
 			// merge old and new fields
 			oldFields = oldItem.fields()
-			item.directSetFields(oldFields)
+			item.directCopyFields(oldFields)
 		}
 	}
 
 	if fields == nil && len(values) > 0 {
 		// directly set the field values, from copy
-		item.directSetFields(values)
+		item.directCopyFields(values)
 	} else if len(fields) > 0 {
 		// add new field to new item
 		c.setFields(item, fields, values, false)
