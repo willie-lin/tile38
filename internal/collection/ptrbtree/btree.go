@@ -15,9 +15,9 @@ type btreeItem struct {
 // keyedItem must match layout of ../collection/itemT, otherwise
 // there's a risk for memory corruption.
 type keyedItem struct {
-	_      interface{}
-	_      uint32
+	obj    interface{}
 	keyLen uint32
+	_      uint32
 	data   unsafe.Pointer
 }
 
