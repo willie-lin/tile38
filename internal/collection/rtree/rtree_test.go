@@ -1,4 +1,4 @@
-package ptrrtree
+package rtree
 
 import (
 	"fmt"
@@ -8,7 +8,10 @@ import (
 	"strings"
 	"testing"
 	"time"
-	"unsafe"
+
+	"github.com/tidwall/geojson"
+	"github.com/tidwall/geojson/geometry"
+	"github.com/tidwall/tile38/internal/collection/item"
 )
 
 type tBox struct {
@@ -16,8 +19,8 @@ type tBox struct {
 	max [dims]float64
 }
 
-var boxes []*tBox
-var points []*tBox
+var boxes []*item.Item
+var points []*item.Item
 
 func init() {
 	seed := time.Now().UnixNano()
@@ -26,54 +29,65 @@ func init() {
 	rand.Seed(seed)
 }
 
-func randPoints(N int) []*tBox {
-	boxes := make([]*tBox, N)
+func boxMin(box *item.Item) []float64 {
+	return box.Obj().(*tBox).min[:]
+}
+func boxMax(box *item.Item) []float64 {
+	return box.Obj().(*tBox).max[:]
+}
+
+func randPoints(N int) []*item.Item {
+	boxes := make([]*item.Item, N)
 	for i := 0; i < N; i++ {
-		boxes[i] = new(tBox)
-		boxes[i].min[0] = rand.Float64()*360 - 180
-		boxes[i].min[1] = rand.Float64()*180 - 90
+		box := new(tBox)
+		box.min[0] = rand.Float64()*360 - 180
+		box.min[1] = rand.Float64()*180 - 90
 		for j := 2; j < dims; j++ {
-			boxes[i].min[j] = rand.Float64()
+			box.min[j] = rand.Float64()
 		}
-		boxes[i].max = boxes[i].min
+		box.max = box.min
+		boxes[i] = item.New(fmt.Sprintf("%d", i), box)
 	}
 	return boxes
 }
 
-func randBoxes(N int) []*tBox {
-	boxes := make([]*tBox, N)
+func randBoxes(N int) []*item.Item {
+	boxes := make([]*item.Item, N)
 	for i := 0; i < N; i++ {
-		boxes[i] = new(tBox)
-		boxes[i].min[0] = rand.Float64()*360 - 180
-		boxes[i].min[1] = rand.Float64()*180 - 90
+		box := new(tBox)
+		box.min[0] = rand.Float64()*360 - 180
+		box.min[1] = rand.Float64()*180 - 90
 		for j := 2; j < dims; j++ {
-			boxes[i].min[j] = rand.Float64() * 100
+			box.min[j] = rand.Float64() * 100
 		}
-		boxes[i].max[0] = boxes[i].min[0] + rand.Float64()
-		boxes[i].max[1] = boxes[i].min[1] + rand.Float64()
+		box.max[0] = box.min[0] + rand.Float64()
+		box.max[1] = box.min[1] + rand.Float64()
 		for j := 2; j < dims; j++ {
-			boxes[i].max[j] = boxes[i].min[j] + rand.Float64()
+			box.max[j] = box.min[j] + rand.Float64()
 		}
-		if boxes[i].max[0] > 180 || boxes[i].max[1] > 90 {
+		if box.max[0] > 180 || box.max[1] > 90 {
 			i--
 		}
+		boxes[i] = item.New(fmt.Sprintf("%d", i), box)
 	}
 	return boxes
 }
 
-func sortBoxes(boxes []*tBox) {
+func sortBoxes(boxes []*item.Item) {
 	sort.Slice(boxes, func(i, j int) bool {
-		for k := 0; k < len(boxes[i].min); k++ {
-			if boxes[i].min[k] < boxes[j].min[k] {
+		iMin, iMax := boxMin(boxes[i]), boxMax(boxes[i])
+		jMin, jMax := boxMin(boxes[j]), boxMax(boxes[j])
+		for k := 0; k < len(iMin); k++ {
+			if iMin[k] < jMin[k] {
 				return true
 			}
-			if boxes[i].min[k] > boxes[j].min[k] {
+			if iMin[k] > jMin[k] {
 				return false
 			}
-			if boxes[i].max[k] < boxes[j].max[k] {
+			if iMax[k] < jMax[k] {
 				return true
 			}
-			if boxes[i].max[k] > boxes[j].max[k] {
+			if iMax[k] > jMax[k] {
 				return false
 			}
 		}
@@ -81,10 +95,10 @@ func sortBoxes(boxes []*tBox) {
 	})
 }
 
-func sortBoxesNearby(boxes []tBox, min, max []float64) {
+func sortBoxesNearby(boxes []*item.Item, min, max []float64) {
 	sort.Slice(boxes, func(i, j int) bool {
-		return testBoxDist(boxes[i].min[:], boxes[i].max[:], min, max) <
-			testBoxDist(boxes[j].min[:], boxes[j].max[:], min, max)
+		return testBoxDist(boxMin(boxes[i]), boxMax(boxes[i]), min, max) <
+			testBoxDist(boxMin(boxes[j]), boxMax(boxes[j]), min, max)
 	})
 }
 
@@ -110,7 +124,7 @@ func testBoxDist(amin, amax, bmin, bmax []float64) float64 {
 	return dist
 }
 
-func testBoxesVarious(t *testing.T, boxes []*tBox, label string) {
+func testBoxesVarious(t *testing.T, items []*item.Item, label string) {
 	N := len(boxes)
 
 	var tr BoxTree
@@ -122,7 +136,7 @@ func testBoxesVarious(t *testing.T, boxes []*tBox, label string) {
 	// insert
 	/////////////////////////////////////////
 	for i := 0; i < N; i++ {
-		tr.Insert(boxes[i].min[:], boxes[i].max[:], unsafe.Pointer(boxes[i]))
+		tr.Insert(boxMin(boxes[i]), boxMax(boxes[i]), boxes[i])
 	}
 	if tr.Count() != N {
 		t.Fatalf("expected %d, got %d", N, tr.Count())
@@ -136,7 +150,7 @@ func testBoxesVarious(t *testing.T, boxes []*tBox, label string) {
 	// scan all items and count one-by-one
 	/////////////////////////////////////////
 	var count int
-	tr.Scan(func(min, max []float64, value unsafe.Pointer) bool {
+	tr.Scan(func(min, max []float64, _ *item.Item) bool {
 		count++
 		return true
 	})
@@ -147,12 +161,12 @@ func testBoxesVarious(t *testing.T, boxes []*tBox, label string) {
 	/////////////////////////////////////////
 	// check every point for correctness
 	/////////////////////////////////////////
-	var tboxes1 []*tBox
-	tr.Scan(func(min, max []float64, value unsafe.Pointer) bool {
-		tboxes1 = append(tboxes1, (*tBox)(value))
+	var tboxes1 []*item.Item
+	tr.Scan(func(min, max []float64, item *item.Item) bool {
+		tboxes1 = append(tboxes1, item)
 		return true
 	})
-	tboxes2 := make([]*tBox, len(boxes))
+	tboxes2 := make([]*item.Item, len(boxes))
 	copy(tboxes2, boxes)
 	sortBoxes(tboxes1)
 	sortBoxes(tboxes2)
@@ -167,9 +181,9 @@ func testBoxesVarious(t *testing.T, boxes []*tBox, label string) {
 	/////////////////////////////////////////
 	for i := 0; i < N; i++ {
 		var found bool
-		tr.Search(boxes[i].min[:], boxes[i].max[:],
-			func(min, max []float64, value unsafe.Pointer) bool {
-				if value == unsafe.Pointer(boxes[i]) {
+		tr.Search(boxMin(boxes[i]), boxMax(boxes[i]),
+			func(min, max []float64, v *item.Item) bool {
+				if v == boxes[i] {
 					found = true
 					return false
 				}
@@ -192,7 +206,7 @@ func testBoxesVarious(t *testing.T, boxes []*tBox, label string) {
 	for i := 0; i < N/5; i++ {
 		var count int
 		tr.Search(centerMin, centerMax,
-			func(min, max []float64, value unsafe.Pointer) bool {
+			func(min, max []float64, _ *item.Item) bool {
 				count++
 				return true
 			},
@@ -204,14 +218,14 @@ func testBoxesVarious(t *testing.T, boxes []*tBox, label string) {
 	/////////////////////////////////////////
 	for i := 0; i < N/2; i++ {
 		j := i * 2
-		tr.Delete(boxes[j].min[:], boxes[j].max[:], unsafe.Pointer(boxes[j]))
+		tr.Delete(boxMin(boxes[j]), boxMax(boxes[j]), boxes[j])
 	}
 
 	/////////////////////////////////////////
 	// count all items. should be half of N
 	/////////////////////////////////////////
 	count = 0
-	tr.Scan(func(min, max []float64, value unsafe.Pointer) bool {
+	tr.Scan(func(min, max []float64, _ *item.Item) bool {
 		count++
 		return true
 	})
@@ -232,28 +246,29 @@ func testBoxesVarious(t *testing.T, boxes []*tBox, label string) {
 	})
 	for i := 0; i < N/2; i++ {
 		j := ij[i]
-		tr.Insert(boxes[j].min[:], boxes[j].max[:], unsafe.Pointer(boxes[j]))
+		tr.Insert(boxMin(boxes[j]), boxMax(boxes[j]), boxes[j])
 	}
 
 	//////////////////////////////////////////////////////
 	// replace each item with an item that is very close
 	//////////////////////////////////////////////////////
-	var nboxes = make([]*tBox, N)
+	var nboxes = make([]*item.Item, N)
 	for i := 0; i < N; i++ {
-		nboxes[i] = new(tBox)
-		for j := 0; j < len(boxes[i].min); j++ {
-			nboxes[i].min[j] = boxes[i].min[j] + (rand.Float64() - 0.5)
-			if boxes[i].min == boxes[i].max {
-				nboxes[i].max[j] = nboxes[i].min[j]
+		box := boxes[i].Obj().(*tBox)
+		nbox := new(tBox)
+		for j := 0; j < len(box.min); j++ {
+			nbox.min[j] = box.min[j] + (rand.Float64() - 0.5)
+			if box.min == box.max {
+				nbox.max[j] = nbox.min[j]
 			} else {
-				nboxes[i].max[j] = boxes[i].max[j] + (rand.Float64() - 0.5)
+				nbox.max[j] = box.max[j] + (rand.Float64() - 0.5)
 			}
 		}
-
+		nboxes[i] = item.New(fmt.Sprintf("%d", i), nbox)
 	}
 	for i := 0; i < N; i++ {
-		tr.Insert(nboxes[i].min[:], nboxes[i].max[:], unsafe.Pointer(nboxes[i]))
-		tr.Delete(boxes[i].min[:], boxes[i].max[:], unsafe.Pointer(boxes[i]))
+		tr.Insert(boxMin(nboxes[i]), boxMax(nboxes[i]), nboxes[i])
+		tr.Delete(boxMin(boxes[i]), boxMax(boxes[i]), boxes[i])
 	}
 	if tr.Count() != N {
 		t.Fatalf("expected %d, got %d", N, tr.Count())
@@ -265,11 +280,11 @@ func testBoxesVarious(t *testing.T, boxes []*tBox, label string) {
 	// check every point for correctness
 	/////////////////////////////////////////
 	tboxes1 = nil
-	tr.Scan(func(min, max []float64, value unsafe.Pointer) bool {
-		tboxes1 = append(tboxes1, (*tBox)(value))
+	tr.Scan(func(min, max []float64, value *item.Item) bool {
+		tboxes1 = append(tboxes1, value)
 		return true
 	})
-	tboxes2 = make([]*tBox, len(nboxes))
+	tboxes2 = make([]*item.Item, len(nboxes))
 	copy(tboxes2, nboxes)
 	sortBoxes(tboxes1)
 	sortBoxes(tboxes2)
@@ -285,17 +300,17 @@ func testBoxesVarious(t *testing.T, boxes []*tBox, label string) {
 	for i := 0; i < N/5; i++ {
 		var count int
 		tr.Search(centerMin, centerMax,
-			func(min, max []float64, value unsafe.Pointer) bool {
+			func(min, max []float64, value *item.Item) bool {
 				count++
 				return true
 			},
 		)
 	}
 
-	var boxes3 []*tBox
+	var boxes3 []*item.Item
 	tr.Nearby(centerMin, centerMax,
-		func(min, max []float64, value unsafe.Pointer) bool {
-			boxes3 = append(boxes3, (*tBox)(value))
+		func(min, max []float64, value *item.Item) bool {
+			boxes3 = append(boxes3, value)
 			return true
 		},
 	)
@@ -307,7 +322,7 @@ func testBoxesVarious(t *testing.T, boxes []*tBox, label string) {
 	}
 	var ldist float64
 	for i, box := range boxes3 {
-		dist := testBoxDist(box.min[:], box.max[:], centerMin, centerMax)
+		dist := testBoxDist(boxMin(box), boxMax(box), centerMin, centerMax)
 		if i > 0 && dist < ldist {
 			t.Fatalf("out of order")
 		}
@@ -378,6 +393,52 @@ func BenchmarkRandomInsert(b *testing.B) {
 	boxes := randBoxes(b.N)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		tr.Insert(boxes[i].min[:], boxes[i].max[:], nil)
+		tr.Insert(boxMin(boxes[i]), boxMax(boxes[i]), nil)
 	}
+}
+
+func (s *tBox) Spatial() geojson.Spatial {
+	return geojson.EmptySpatial{}
+}
+func (s *tBox) ForEach(iter func(geom geojson.Object) bool) bool {
+	return iter(s)
+}
+func (s *tBox) Empty() bool {
+	return true
+}
+func (s *tBox) Valid() bool {
+	return false
+}
+func (s *tBox) Rect() geometry.Rect {
+	return geometry.Rect{}
+}
+func (s *tBox) Center() geometry.Point {
+	return geometry.Point{}
+}
+func (s *tBox) AppendJSON(dst []byte) []byte {
+	return nil
+}
+func (s *tBox) String() string {
+	return ""
+}
+func (s *tBox) JSON() string {
+	return string(s.AppendJSON(nil))
+}
+func (s *tBox) MarshalJSON() ([]byte, error) {
+	return s.AppendJSON(nil), nil
+}
+func (s *tBox) Within(obj geojson.Object) bool {
+	return false
+}
+func (s *tBox) Contains(obj geojson.Object) bool {
+	return false
+}
+func (s *tBox) Intersects(obj geojson.Object) bool {
+	return false
+}
+func (s *tBox) NumPoints() int {
+	return 0
+}
+func (s *tBox) Distance(obj geojson.Object) float64 {
+	return 0
 }

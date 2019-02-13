@@ -1,34 +1,18 @@
-package ptrbtree
+package btree
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"sort"
 	"strings"
 	"testing"
 	"time"
-	"unsafe"
+
+	"github.com/tidwall/geojson"
+	"github.com/tidwall/geojson/geometry"
+	"github.com/tidwall/tile38/internal/collection/item"
 )
-
-func makeItem(key string, obj interface{}) unsafe.Pointer {
-	item := new(keyedItem)
-	item.obj = obj
-	if len(key) > 0 {
-		data := make([]byte, len(key))
-		copy(data, key)
-		item.keyLen = uint32(len(key))
-		item.data = unsafe.Pointer(&data[0])
-	}
-	return unsafe.Pointer(item)
-}
-
-func itemKey(ptr unsafe.Pointer) string {
-	return (btreeItem{ptr}).key()
-}
-
-func itemValue(ptr unsafe.Pointer) interface{} {
-	return (*keyedItem)(ptr).obj
-}
 
 func init() {
 	seed := time.Now().UnixNano()
@@ -63,12 +47,12 @@ func (n *node) print(level, height int) {
 			n.children[i].print(level+1, height-1)
 		}
 		if height > 0 || (height == 0 && !flatLeaf) {
-			fmt.Printf("%s%v\n", strings.Repeat("  ", level), n.items[i].key())
+			fmt.Printf("%s%v\n", strings.Repeat("  ", level), n.items[i].ID())
 		} else {
 			if i > 0 {
 				fmt.Printf(",")
 			}
-			fmt.Printf("%s", n.items[i].key())
+			fmt.Printf("%s", n.items[i].ID())
 		}
 	}
 	if height == 0 && flatLeaf {
@@ -117,7 +101,7 @@ func stringsEquals(a, b []string) bool {
 func TestDescend(t *testing.T) {
 	var tr BTree
 	var count int
-	tr.Descend("1", func(ptr unsafe.Pointer) bool {
+	tr.Descend("1", func(item *item.Item) bool {
 		count++
 		return true
 	})
@@ -127,26 +111,26 @@ func TestDescend(t *testing.T) {
 	var keys []string
 	for i := 0; i < 1000; i += 10 {
 		keys = append(keys, fmt.Sprintf("%03d", i))
-		tr.Set(makeItem(keys[len(keys)-1], nil))
+		tr.Set(item.New(keys[len(keys)-1], nil))
 	}
 	var exp []string
-	tr.Reverse(func(ptr unsafe.Pointer) bool {
-		exp = append(exp, itemKey(ptr))
+	tr.Reverse(func(item *item.Item) bool {
+		exp = append(exp, item.ID())
 		return true
 	})
 	for i := 999; i >= 0; i-- {
 		var key string
 		key = fmt.Sprintf("%03d", i)
 		var all []string
-		tr.Descend(key, func(ptr unsafe.Pointer) bool {
-			all = append(all, itemKey(ptr))
+		tr.Descend(key, func(item *item.Item) bool {
+			all = append(all, item.ID())
 			return true
 		})
 		for len(exp) > 0 && key < exp[0] {
 			exp = exp[1:]
 		}
 		var count int
-		tr.Descend(key, func(ptr unsafe.Pointer) bool {
+		tr.Descend(key, func(item *item.Item) bool {
 			if count == (i+1)%maxItems {
 				return false
 			}
@@ -168,7 +152,7 @@ func TestDescend(t *testing.T) {
 func TestAscend(t *testing.T) {
 	var tr BTree
 	var count int
-	tr.Ascend("1", func(ptr unsafe.Pointer) bool {
+	tr.Ascend("1", func(item *item.Item) bool {
 		count++
 		return true
 	})
@@ -178,7 +162,7 @@ func TestAscend(t *testing.T) {
 	var keys []string
 	for i := 0; i < 1000; i += 10 {
 		keys = append(keys, fmt.Sprintf("%03d", i))
-		tr.Set(makeItem(keys[len(keys)-1], nil))
+		tr.Set(item.New(keys[len(keys)-1], nil))
 	}
 	exp := keys
 	for i := -1; i < 1000; i++ {
@@ -189,8 +173,8 @@ func TestAscend(t *testing.T) {
 			key = fmt.Sprintf("%03d", i)
 		}
 		var all []string
-		tr.Ascend(key, func(ptr unsafe.Pointer) bool {
-			all = append(all, itemKey(ptr))
+		tr.Ascend(key, func(item *item.Item) bool {
+			all = append(all, item.ID())
 			return true
 		})
 
@@ -198,7 +182,7 @@ func TestAscend(t *testing.T) {
 			exp = exp[1:]
 		}
 		var count int
-		tr.Ascend(key, func(ptr unsafe.Pointer) bool {
+		tr.Ascend(key, func(item *item.Item) bool {
 			if count == (i+1)%maxItems {
 				return false
 			}
@@ -221,7 +205,7 @@ func TestBTree(t *testing.T) {
 
 	// insert all items
 	for _, key := range keys {
-		value, replaced := tr.Set(makeItem(key, key))
+		value, replaced := tr.Set(item.New(key, testString(key)))
 		if replaced {
 			t.Fatal("expected false")
 		}
@@ -241,7 +225,7 @@ func TestBTree(t *testing.T) {
 		if !gotten {
 			t.Fatal("expected true")
 		}
-		if value == nil || itemValue(value) != key {
+		if value == nil || value.Obj().String() != key {
 			t.Fatalf("expected '%v', got '%v'", key, value)
 		}
 	}
@@ -249,15 +233,15 @@ func TestBTree(t *testing.T) {
 	// scan all items
 	var last string
 	all := make(map[string]interface{})
-	tr.Scan(func(ptr unsafe.Pointer) bool {
-		if itemKey(ptr) <= last {
+	tr.Scan(func(item *item.Item) bool {
+		if item.ID() <= last {
 			t.Fatal("out of order")
 		}
-		if itemValue(ptr).(string) != itemKey(ptr) {
+		if item.Obj().String() != item.ID() {
 			t.Fatalf("mismatch")
 		}
-		last = itemKey(ptr)
-		all[itemKey(ptr)] = itemValue(ptr)
+		last = item.ID()
+		all[item.ID()] = item.Obj().String()
 		return true
 	})
 	if len(all) != len(keys) {
@@ -267,15 +251,15 @@ func TestBTree(t *testing.T) {
 	// reverse all items
 	var prev string
 	all = make(map[string]interface{})
-	tr.Reverse(func(ptr unsafe.Pointer) bool {
-		if prev != "" && itemKey(ptr) >= prev {
+	tr.Reverse(func(item *item.Item) bool {
+		if prev != "" && item.ID() >= prev {
 			t.Fatal("out of order")
 		}
-		if itemValue(ptr).(string) != itemKey(ptr) {
+		if item.Obj().String() != item.ID() {
 			t.Fatalf("mismatch")
 		}
-		prev = itemKey(ptr)
-		all[itemKey(ptr)] = itemValue(ptr)
+		prev = item.ID()
+		all[item.ID()] = item.Obj().String()
 		return true
 	})
 	if len(all) != len(keys) {
@@ -294,7 +278,7 @@ func TestBTree(t *testing.T) {
 	// scan and quit at various steps
 	for i := 0; i < 100; i++ {
 		var j int
-		tr.Scan(func(ptr unsafe.Pointer) bool {
+		tr.Scan(func(item *item.Item) bool {
 			if j == i {
 				return false
 			}
@@ -306,7 +290,7 @@ func TestBTree(t *testing.T) {
 	// reverse and quit at various steps
 	for i := 0; i < 100; i++ {
 		var j int
-		tr.Reverse(func(ptr unsafe.Pointer) bool {
+		tr.Reverse(func(item *item.Item) bool {
 			if j == i {
 				return false
 			}
@@ -321,7 +305,7 @@ func TestBTree(t *testing.T) {
 		if !deleted {
 			t.Fatal("expected true")
 		}
-		if value == nil || itemValue(value).(string) != key {
+		if value == nil || value.Obj().String() != key {
 			t.Fatalf("expected '%v', got '%v'", key, value)
 		}
 	}
@@ -361,15 +345,15 @@ func TestBTree(t *testing.T) {
 	// scan items
 	last = ""
 	all = make(map[string]interface{})
-	tr.Scan(func(ptr unsafe.Pointer) bool {
-		if itemKey(ptr) <= last {
+	tr.Scan(func(item *item.Item) bool {
+		if item.ID() <= last {
 			t.Fatal("out of order")
 		}
-		if itemValue(ptr).(string) != itemKey(ptr) {
+		if item.Obj().String() != item.ID() {
 			t.Fatalf("mismatch")
 		}
-		last = itemKey(ptr)
-		all[itemKey(ptr)] = itemValue(ptr)
+		last = item.ID()
+		all[item.ID()] = item.Obj().String()
 		return true
 	})
 	if len(all) != len(keys)/2 {
@@ -378,11 +362,11 @@ func TestBTree(t *testing.T) {
 
 	// replace second half
 	for _, key := range keys[len(keys)/2:] {
-		value, replaced := tr.Set(makeItem(key, key))
+		value, replaced := tr.Set(item.New(key, testString(key)))
 		if !replaced {
 			t.Fatal("expected true")
 		}
-		if value == nil || itemValue(value).(string) != key {
+		if value == nil || value.Obj().String() != key {
 			t.Fatalf("expected '%v', got '%v'", key, value)
 		}
 	}
@@ -393,7 +377,7 @@ func TestBTree(t *testing.T) {
 		if !deleted {
 			t.Fatal("expected true")
 		}
-		if value == nil || itemValue(value).(string) != key {
+		if value == nil || value.Obj().String() != key {
 			t.Fatalf("expected '%v', got '%v'", key, value)
 		}
 	}
@@ -411,11 +395,11 @@ func TestBTree(t *testing.T) {
 	if value != nil {
 		t.Fatal("expected nil")
 	}
-	tr.Scan(func(ptr unsafe.Pointer) bool {
+	tr.Scan(func(item *item.Item) bool {
 		t.Fatal("should not be reached")
 		return true
 	})
-	tr.Reverse(func(ptr unsafe.Pointer) bool {
+	tr.Reverse(func(item *item.Item) bool {
 		t.Fatal("should not be reached")
 		return true
 	})
@@ -436,7 +420,7 @@ func BenchmarkTidwallSequentialSet(b *testing.B) {
 	sort.Strings(keys)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		tr.Set(makeItem(keys[i], nil))
+		tr.Set(item.New(keys[i], nil))
 	}
 }
 
@@ -445,7 +429,7 @@ func BenchmarkTidwallSequentialGet(b *testing.B) {
 	keys := randKeys(b.N)
 	sort.Strings(keys)
 	for i := 0; i < b.N; i++ {
-		tr.Set(makeItem(keys[i], nil))
+		tr.Set(item.New(keys[i], nil))
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -458,7 +442,7 @@ func BenchmarkTidwallRandomSet(b *testing.B) {
 	keys := randKeys(b.N)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		tr.Set(makeItem(keys[i], nil))
+		tr.Set(item.New(keys[i], nil))
 	}
 }
 
@@ -466,7 +450,7 @@ func BenchmarkTidwallRandomGet(b *testing.B) {
 	var tr BTree
 	keys := randKeys(b.N)
 	for i := 0; i < b.N; i++ {
-		tr.Set(makeItem(keys[i], nil))
+		tr.Set(item.New(keys[i], nil))
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -544,11 +528,11 @@ func BenchmarkTidwallRandomGet(b *testing.B) {
 
 func TestBTreeOne(t *testing.T) {
 	var tr BTree
-	tr.Set(makeItem("1", "1"))
+	tr.Set(item.New("1", testString("1")))
 	tr.Delete("1")
-	tr.Set(makeItem("1", "1"))
+	tr.Set(item.New("1", testString("1")))
 	tr.Delete("1")
-	tr.Set(makeItem("1", "1"))
+	tr.Set(item.New("1", testString("1")))
 	tr.Delete("1")
 }
 
@@ -557,7 +541,7 @@ func TestBTree256(t *testing.T) {
 	var n int
 	for j := 0; j < 2; j++ {
 		for _, i := range rand.Perm(256) {
-			tr.Set(makeItem(fmt.Sprintf("%d", i), i))
+			tr.Set(item.New(fmt.Sprintf("%d", i), testString(fmt.Sprintf("%d", i))))
 			n++
 			if tr.Len() != n {
 				t.Fatalf("expected 256, got %d", n)
@@ -568,8 +552,8 @@ func TestBTree256(t *testing.T) {
 			if !ok {
 				t.Fatal("expected true")
 			}
-			if itemValue(v).(int) != i {
-				t.Fatalf("expected %d, got %d", i, itemValue(v).(int))
+			if v.Obj().String() != fmt.Sprintf("%d", i) {
+				t.Fatalf("expected %d, got %s", i, v.Obj().String())
 			}
 		}
 		for _, i := range rand.Perm(256) {
@@ -586,4 +570,53 @@ func TestBTree256(t *testing.T) {
 			}
 		}
 	}
+}
+
+type testString string
+
+func (s testString) Spatial() geojson.Spatial {
+	return geojson.EmptySpatial{}
+}
+func (s testString) ForEach(iter func(geom geojson.Object) bool) bool {
+	return iter(s)
+}
+func (s testString) Empty() bool {
+	return true
+}
+func (s testString) Valid() bool {
+	return false
+}
+func (s testString) Rect() geometry.Rect {
+	return geometry.Rect{}
+}
+func (s testString) Center() geometry.Point {
+	return geometry.Point{}
+}
+func (s testString) AppendJSON(dst []byte) []byte {
+	data, _ := json.Marshal(string(s))
+	return append(dst, data...)
+}
+func (s testString) String() string {
+	return string(s)
+}
+func (s testString) JSON() string {
+	return string(s.AppendJSON(nil))
+}
+func (s testString) MarshalJSON() ([]byte, error) {
+	return s.AppendJSON(nil), nil
+}
+func (s testString) Within(obj geojson.Object) bool {
+	return false
+}
+func (s testString) Contains(obj geojson.Object) bool {
+	return false
+}
+func (s testString) Intersects(obj geojson.Object) bool {
+	return false
+}
+func (s testString) NumPoints() int {
+	return 0
+}
+func (s testString) Distance(obj geojson.Object) float64 {
+	return 0
 }

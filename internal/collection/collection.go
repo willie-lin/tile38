@@ -1,14 +1,13 @@
 package collection
 
 import (
-	"unsafe"
-
-	"github.com/tidwall/btree"
+	ifbtree "github.com/tidwall/btree"
 	"github.com/tidwall/geojson"
 	"github.com/tidwall/geojson/geo"
 	"github.com/tidwall/geojson/geometry"
-	"github.com/tidwall/tile38/internal/collection/ptrbtree"
-	"github.com/tidwall/tile38/internal/collection/ptrrtree"
+	"github.com/tidwall/tile38/internal/collection/btree"
+	"github.com/tidwall/tile38/internal/collection/item"
+	"github.com/tidwall/tile38/internal/collection/rtree"
 )
 
 // Cursor allows for quickly paging through Scan, Within, Intersects, and Nearby
@@ -19,9 +18,9 @@ type Cursor interface {
 
 // Collection represents a collection of geojson objects.
 type Collection struct {
-	items    ptrbtree.BTree   // items sorted by keys
-	index    ptrrtree.BoxTree // items geospatially indexed
-	values   *btree.BTree     // items sorted by value+key
+	items    btree.BTree    // items sorted by keys
+	index    rtree.BoxTree  // items geospatially indexed
+	values   *ifbtree.BTree // items sorted by value+key
 	fieldMap map[string]int
 	weight   int
 	points   int
@@ -34,7 +33,7 @@ var counter uint64
 // New creates an empty collection
 func New() *Collection {
 	col := &Collection{
-		values:   btree.New(16, nil),
+		values:   ifbtree.New(16, nil),
 		fieldMap: make(map[string]int),
 	}
 	return col
@@ -74,48 +73,40 @@ func objIsSpatial(obj geojson.Object) bool {
 	return ok
 }
 
-func (c *Collection) indexDelete(item *itemT) {
-	if !item.obj.Empty() {
-		rect := item.obj.Rect()
-		c.index.Delete(
-			[]float64{rect.Min.X, rect.Min.Y},
-			[]float64{rect.Max.X, rect.Max.Y},
-			unsafe.Pointer(item))
-	}
-}
-
-func (c *Collection) indexInsert(item *itemT) {
-	if !item.obj.Empty() {
-		rect := item.obj.Rect()
-		c.index.Insert(
-			[]float64{rect.Min.X, rect.Min.Y},
-			[]float64{rect.Max.X, rect.Max.Y},
-			unsafe.Pointer(item))
-	}
-}
-
-func (c *Collection) addItem(item *itemT) {
-	if objIsSpatial(item.obj) {
-		c.indexInsert(item)
+func (c *Collection) addItem(item *item.Item) {
+	if objIsSpatial(item.Obj()) {
+		if !item.Obj().Empty() {
+			rect := item.Obj().Rect()
+			c.index.Insert(
+				[]float64{rect.Min.X, rect.Min.Y},
+				[]float64{rect.Max.X, rect.Max.Y},
+				item)
+		}
 		c.objects++
 	} else {
 		c.values.ReplaceOrInsert(item)
 		c.nobjects++
 	}
-	weight, points := item.weightAndPoints()
+	weight, points := item.WeightAndPoints()
 	c.weight += weight
 	c.points += points
 }
 
-func (c *Collection) delItem(item *itemT) {
-	if objIsSpatial(item.obj) {
-		c.indexDelete(item)
+func (c *Collection) delItem(item *item.Item) {
+	if objIsSpatial(item.Obj()) {
+		if !item.Obj().Empty() {
+			rect := item.Obj().Rect()
+			c.index.Delete(
+				[]float64{rect.Min.X, rect.Min.Y},
+				[]float64{rect.Max.X, rect.Max.Y},
+				item)
+		}
 		c.objects--
 	} else {
 		c.values.Delete(item)
 		c.nobjects--
 	}
-	weight, points := item.weightAndPoints()
+	weight, points := item.WeightAndPoints()
 	c.weight -= weight
 	c.points -= points
 }
@@ -131,26 +122,26 @@ func (c *Collection) Set(
 	oldObj geojson.Object, oldFields []float64, newFields []float64,
 ) {
 	// create the new item
-	item := newItem(id, obj)
+	item := item.New(id, obj)
 
 	// add the new item to main btree and remove the old one if needed
-	oldItemV, ok := c.items.Set(unsafe.Pointer(item))
+	oldItemV, ok := c.items.Set(item)
 	if ok {
-		oldItem := (*itemT)(oldItemV)
-		oldObj = oldItem.obj
+		oldItem := oldItemV
+		oldObj = oldItem.Obj()
 
 		// remove old item from indexes
 		c.delItem(oldItem)
-		if len(oldItem.fields()) > 0 {
+		if len(oldItem.Fields()) > 0 {
 			// merge old and new fields
-			oldFields = oldItem.fields()
-			item.directCopyFields(oldFields)
+			oldFields = oldItem.Fields()
+			item.CopyOverFields(oldFields)
 		}
 	}
 
 	if fields == nil && len(values) > 0 {
 		// directly set the field values, from copy
-		item.directCopyFields(values)
+		item.CopyOverFields(values)
 	} else if len(fields) > 0 {
 		// add new field to new item
 		c.setFields(item, fields, values, false)
@@ -160,7 +151,42 @@ func (c *Collection) Set(
 	c.addItem(item)
 	// fmt.Printf("!!! %#v\n", oldObj)
 
-	return oldObj, oldFields, item.fields()
+	return oldObj, oldFields, item.Fields()
+}
+
+func (c *Collection) setFields(
+	item *item.Item, fieldNames []string, fieldValues []float64, updateWeight bool,
+) (updatedCount int) {
+	for i, fieldName := range fieldNames {
+		var fieldValue float64
+		if i < len(fieldValues) {
+			fieldValue = fieldValues[i]
+		}
+		if c.setField(item, fieldName, fieldValue, updateWeight) {
+			updatedCount++
+		}
+	}
+	return updatedCount
+}
+
+func (c *Collection) setField(
+	item *item.Item, fieldName string, fieldValue float64, updateWeight bool,
+) (updated bool) {
+	idx, ok := c.fieldMap[fieldName]
+	if !ok {
+		idx = len(c.fieldMap)
+		c.fieldMap[fieldName] = idx
+	}
+	var pweight int
+	if updateWeight {
+		pweight, _ = item.WeightAndPoints()
+	}
+	updated = item.SetField(idx, fieldValue)
+	if updateWeight && updated {
+		nweight, _ := item.WeightAndPoints()
+		c.weight = c.weight - pweight + nweight
+	}
+	return updated
 }
 
 // Delete removes an object and returns it.
@@ -172,11 +198,11 @@ func (c *Collection) Delete(id string) (
 	if !ok {
 		return nil, nil, false
 	}
-	oldItem := (*itemT)(oldItemV)
+	oldItem := oldItemV
 
 	c.delItem(oldItem)
 
-	return oldItem.obj, oldItem.fields(), true
+	return oldItem.Obj(), oldItem.Fields(), true
 }
 
 // Get returns an object.
@@ -188,9 +214,9 @@ func (c *Collection) Get(id string) (
 	if !ok {
 		return nil, nil, false
 	}
-	item := (*itemT)(itemV)
+	item := itemV
 
-	return item.obj, item.fields(), true
+	return item.Obj(), item.Fields(), true
 }
 
 // SetField set a field value for an object and returns that object.
@@ -202,9 +228,9 @@ func (c *Collection) SetField(id, fieldName string, fieldValue float64) (
 	if !ok {
 		return nil, nil, false, false
 	}
-	item := (*itemT)(itemV)
+	item := itemV
 	updated = c.setField(item, fieldName, fieldValue, true)
-	return item.obj, item.fields(), updated, true
+	return item.Obj(), item.Fields(), updated, true
 }
 
 // SetFields is similar to SetField, just setting multiple fields at once
@@ -215,11 +241,11 @@ func (c *Collection) SetFields(
 	if !ok {
 		return nil, nil, 0, false
 	}
-	item := (*itemT)(itemV)
+	item := itemV
 
 	updatedCount = c.setFields(item, fieldNames, fieldValues, true)
 
-	return item.obj, item.fields(), updatedCount, true
+	return item.Obj(), item.Fields(), updatedCount, true
 }
 
 // FieldMap return a maps of the field names.
@@ -247,7 +273,7 @@ func (c *Collection) Scan(desc bool, cursor Cursor,
 		offset = cursor.Offset()
 		cursor.Step(offset)
 	}
-	iter := func(ptr unsafe.Pointer) bool {
+	iter := func(item *item.Item) bool {
 		count++
 		if count <= offset {
 			return true
@@ -255,8 +281,7 @@ func (c *Collection) Scan(desc bool, cursor Cursor,
 		if cursor != nil {
 			cursor.Step(1)
 		}
-		iitm := (*itemT)(ptr)
-		keepon = iterator(iitm.id(), iitm.obj, iitm.fields())
+		keepon = iterator(item.ID(), item.Obj(), item.Fields())
 		return keepon
 	}
 	if desc {
@@ -278,7 +303,7 @@ func (c *Collection) ScanRange(start, end string, desc bool, cursor Cursor,
 		offset = cursor.Offset()
 		cursor.Step(offset)
 	}
-	iter := func(ptr unsafe.Pointer) bool {
+	iter := func(item *item.Item) bool {
 		count++
 		if count <= offset {
 			return true
@@ -286,17 +311,16 @@ func (c *Collection) ScanRange(start, end string, desc bool, cursor Cursor,
 		if cursor != nil {
 			cursor.Step(1)
 		}
-		iitm := (*itemT)(ptr)
 		if !desc {
-			if iitm.id() >= end {
+			if item.ID() >= end {
 				return false
 			}
 		} else {
-			if iitm.id() <= end {
+			if item.ID() <= end {
 				return false
 			}
 		}
-		keepon = iterator(iitm.id(), iitm.obj, iitm.fields())
+		keepon = iterator(item.ID(), item.Obj(), item.Fields())
 		return keepon
 	}
 
@@ -319,7 +343,7 @@ func (c *Collection) SearchValues(desc bool, cursor Cursor,
 		offset = cursor.Offset()
 		cursor.Step(offset)
 	}
-	iter := func(item btree.Item) bool {
+	iter := func(v ifbtree.Item) bool {
 		count++
 		if count <= offset {
 			return true
@@ -327,8 +351,8 @@ func (c *Collection) SearchValues(desc bool, cursor Cursor,
 		if cursor != nil {
 			cursor.Step(1)
 		}
-		iitm := item.(*itemT)
-		keepon = iterator(iitm.id(), iitm.obj, iitm.fields())
+		iitm := v.(*item.Item)
+		keepon = iterator(iitm.ID(), iitm.Obj(), iitm.Fields())
 		return keepon
 	}
 	if desc {
@@ -351,7 +375,7 @@ func (c *Collection) SearchValuesRange(start, end string, desc bool,
 		offset = cursor.Offset()
 		cursor.Step(offset)
 	}
-	iter := func(item btree.Item) bool {
+	iter := func(v ifbtree.Item) bool {
 		count++
 		if count <= offset {
 			return true
@@ -359,17 +383,17 @@ func (c *Collection) SearchValuesRange(start, end string, desc bool,
 		if cursor != nil {
 			cursor.Step(1)
 		}
-		iitm := item.(*itemT)
-		keepon = iterator(iitm.id(), iitm.obj, iitm.fields())
+		iitm := v.(*item.Item)
+		keepon = iterator(iitm.ID(), iitm.Obj(), iitm.Fields())
 		return keepon
 	}
 	if desc {
 		c.values.DescendRange(
-			newItem("", String(start)), newItem("", String(end)), iter,
+			item.New("", String(start)), item.New("", String(end)), iter,
 		)
 	} else {
 		c.values.AscendRange(
-			newItem("", String(start)), newItem("", String(end)), iter,
+			item.New("", String(start)), item.New("", String(end)), iter,
 		)
 	}
 	return keepon
@@ -387,7 +411,7 @@ func (c *Collection) ScanGreaterOrEqual(id string, desc bool,
 		offset = cursor.Offset()
 		cursor.Step(offset)
 	}
-	iter := func(ptr unsafe.Pointer) bool {
+	iter := func(item *item.Item) bool {
 		count++
 		if count <= offset {
 			return true
@@ -395,8 +419,7 @@ func (c *Collection) ScanGreaterOrEqual(id string, desc bool,
 		if cursor != nil {
 			cursor.Step(1)
 		}
-		iitm := (*itemT)(ptr)
-		keepon = iterator(iitm.id(), iitm.obj, iitm.fields())
+		keepon = iterator(item.ID(), item.Obj(), item.Fields())
 		return keepon
 	}
 	if desc {
@@ -415,9 +438,9 @@ func (c *Collection) geoSearch(
 	c.index.Search(
 		[]float64{rect.Min.X, rect.Min.Y},
 		[]float64{rect.Max.X, rect.Max.Y},
-		func(_, _ []float64, itemv unsafe.Pointer) bool {
-			item := (*itemT)(itemv)
-			alive = iter(item.id(), item.obj, item.fields())
+		func(_, _ []float64, itemv *item.Item) bool {
+			item := itemv
+			alive = iter(item.ID(), item.Obj(), item.Fields())
 			return alive
 		},
 	)
@@ -610,7 +633,7 @@ func (c *Collection) Nearby(
 			c.index.Search(
 				[]float64{minLon, minLat},
 				[]float64{maxLon, maxLat},
-				func(_, _ []float64, itemv unsafe.Pointer) bool {
+				func(_, _ []float64, itemv *item.Item) bool {
 					exists = true
 					return false
 				},
@@ -633,7 +656,7 @@ func (c *Collection) Nearby(
 	c.index.Nearby(
 		[]float64{center.X, center.Y},
 		[]float64{center.X, center.Y},
-		func(_, _ []float64, itemv unsafe.Pointer) bool {
+		func(_, _ []float64, itemv *item.Item) bool {
 			count++
 			if count <= offset {
 				return true
@@ -641,8 +664,8 @@ func (c *Collection) Nearby(
 			if cursor != nil {
 				cursor.Step(1)
 			}
-			item := (*itemT)(itemv)
-			alive = iter(item.id(), item.obj, item.fields())
+			item := itemv
+			alive = iter(item.ID(), item.Obj(), item.Fields())
 			return alive
 		},
 	)

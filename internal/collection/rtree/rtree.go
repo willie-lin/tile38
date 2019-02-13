@@ -1,6 +1,10 @@
-package ptrrtree
+package rtree
 
-import "unsafe"
+import (
+	"unsafe"
+
+	"github.com/tidwall/tile38/internal/collection/item"
+)
 
 const dims = 2
 
@@ -90,10 +94,10 @@ func (r *box) enlargedArea(b *box) float64 {
 }
 
 // Insert inserts an item into the RTree
-func (tr *BoxTree) Insert(min, max []float64, value unsafe.Pointer) {
-	var item box
-	fit(min, max, value, &item)
-	tr.insert(&item)
+func (tr *BoxTree) Insert(min, max []float64, item *item.Item) {
+	var box box
+	fit(min, max, unsafe.Pointer(item), &box)
+	tr.insert(&box)
 }
 
 func (tr *BoxTree) insert(item *box) {
@@ -317,14 +321,14 @@ func (r *box) intersects(b *box) bool {
 
 func (r *box) search(
 	target *box, height int,
-	iter func(min, max []float64, value unsafe.Pointer) bool,
+	iter func(min, max []float64, item *item.Item) bool,
 ) bool {
 	n := (*node)(r.data)
 	if height == 0 {
 		for i := 0; i < n.count; i++ {
 			if target.intersects(&n.boxes[i]) {
 				if !iter(n.boxes[i].min[:], n.boxes[i].max[:],
-					n.boxes[i].data) {
+					(*item.Item)(n.boxes[i].data)) {
 					return false
 				}
 			}
@@ -348,7 +352,7 @@ func (r *box) search(
 
 func (tr *BoxTree) search(
 	target *box,
-	iter func(min, max []float64, value unsafe.Pointer) bool,
+	iter func(min, max []float64, item *item.Item) bool,
 ) {
 	if tr.root.data == nil {
 		return
@@ -363,7 +367,7 @@ func (tr *BoxTree) search(
 
 // Search ...
 func (tr *BoxTree) Search(min, max []float64,
-	iter func(min, max []float64, value unsafe.Pointer) bool,
+	iter func(min, max []float64, item *item.Item) bool,
 ) {
 	var target box
 	fit(min, max, nil, &target)
@@ -381,7 +385,7 @@ const (
 
 // Traverse iterates through all items and container boxes in tree.
 func (tr *BoxTree) Traverse(
-	iter func(min, max []float64, height, level int, value unsafe.Pointer) int,
+	iter func(min, max []float64, height, level int, item *item.Item) int,
 ) {
 	if tr.root.data == nil {
 		return
@@ -393,13 +397,13 @@ func (tr *BoxTree) Traverse(
 
 func (r *box) traverse(
 	height, level int,
-	iter func(min, max []float64, height, level int, value unsafe.Pointer) int,
+	iter func(min, max []float64, height, level int, value *item.Item) int,
 ) int {
 	n := (*node)(r.data)
 	if height == 0 {
 		for i := 0; i < n.count; i++ {
 			action := iter(n.boxes[i].min[:], n.boxes[i].max[:], height, level,
-				n.boxes[i].data)
+				(*item.Item)(n.boxes[i].data))
 			if action == Stop {
 				return Stop
 			}
@@ -407,7 +411,7 @@ func (r *box) traverse(
 	} else {
 		for i := 0; i < n.count; i++ {
 			switch iter(n.boxes[i].min[:], n.boxes[i].max[:], height, level,
-				n.boxes[i].data) {
+				(*item.Item)(n.boxes[i].data)) {
 			case Ignore:
 			case Continue:
 				if n.boxes[i].traverse(height-1, level+1, iter) == Stop {
@@ -422,12 +426,13 @@ func (r *box) traverse(
 }
 
 func (r *box) scan(
-	height int, iter func(min, max []float64, value unsafe.Pointer) bool,
+	height int, iter func(min, max []float64, value *item.Item) bool,
 ) bool {
 	n := (*node)(r.data)
 	if height == 0 {
 		for i := 0; i < n.count; i++ {
-			if !iter(n.boxes[i].min[:], n.boxes[i].max[:], n.boxes[i].data) {
+			if !iter(n.boxes[i].min[:], n.boxes[i].max[:],
+				(*item.Item)(n.boxes[i].data)) {
 				return false
 			}
 		}
@@ -442,7 +447,7 @@ func (r *box) scan(
 }
 
 // Scan iterates through all items in tree.
-func (tr *BoxTree) Scan(iter func(min, max []float64, value unsafe.Pointer) bool) {
+func (tr *BoxTree) Scan(iter func(min, max []float64, item *item.Item) bool) {
 	if tr.root.data == nil {
 		return
 	}
@@ -450,15 +455,15 @@ func (tr *BoxTree) Scan(iter func(min, max []float64, value unsafe.Pointer) bool
 }
 
 // Delete ...
-func (tr *BoxTree) Delete(min, max []float64, value unsafe.Pointer) {
-	var item box
-	fit(min, max, value, &item)
-	if tr.root.data == nil || !tr.root.contains(&item) {
+func (tr *BoxTree) Delete(min, max []float64, item *item.Item) {
+	var target box
+	fit(min, max, unsafe.Pointer(item), &target)
+	if tr.root.data == nil || !tr.root.contains(&target) {
 		return
 	}
 	var removed, recalced bool
 	removed, recalced, tr.reinsert =
-		tr.root.delete(&item, tr.height, tr.reinsert[:0])
+		tr.root.delete(&target, tr.height, tr.reinsert[:0])
 	if !removed {
 		return
 	}
@@ -647,7 +652,7 @@ func (q *queue) pop() qnode {
 // Nearby returns items nearest to farthest.
 // The dist param is the "box distance".
 func (tr *BoxTree) Nearby(min, max []float64,
-	iter func(min, max []float64, item unsafe.Pointer) bool) {
+	iter func(min, max []float64, item *item.Item) bool) {
 	if tr.root.data == nil {
 		return
 	}
@@ -666,8 +671,8 @@ func (tr *BoxTree) Nearby(min, max []float64,
 			if q.peek().height > -1 {
 				break
 			}
-			item := q.pop()
-			if !iter(item.box.min[:], item.box.max[:], item.box.data) {
+			v := q.pop()
+			if !iter(v.box.min[:], v.box.max[:], (*item.Item)(v.box.data)) {
 				return
 			}
 		}
