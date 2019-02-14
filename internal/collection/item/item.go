@@ -10,10 +10,24 @@ import (
 
 // Item is a item for Tile38 collections
 type Item struct {
-	fieldsLen uint32         // fields block size in bytes, not num of fields
+	point     bool           // true: Item is pointItem, false: Item is objItem
+	fieldsLen uint16         // fields block size in bytes, not num of fields
 	idLen     uint32         // id block size in bytes
-	data      unsafe.Pointer // pointer to raw block of bytes
-	obj       geojson.Object // geojson or string
+	data      unsafe.Pointer // pointer to raw block of bytes, fields+id
+}
+type objItem struct {
+	_   bool
+	_   uint16
+	_   uint32
+	_   unsafe.Pointer
+	obj geojson.Object
+}
+type pointItem struct {
+	_  bool
+	_  uint16
+	_  uint32
+	_  unsafe.Pointer
+	pt geojson.SimplePoint
 }
 
 // ID returns the items ID as a string
@@ -35,13 +49,25 @@ func (item *Item) Fields() []float64 {
 
 // Obj returns the geojson object
 func (item *Item) Obj() geojson.Object {
-	return item.obj
+	if item.point {
+		return &(*pointItem)(unsafe.Pointer(item)).pt
+	}
+	return (*objItem)(unsafe.Pointer(item)).obj
 }
 
 // New returns a newly allocated Item
 func New(id string, obj geojson.Object) *Item {
-	item := new(Item)
-	item.obj = obj
+	var item *Item
+	if pt, ok := obj.(*geojson.SimplePoint); ok {
+		pitem := new(pointItem)
+		pitem.pt = *pt
+		item = (*Item)(unsafe.Pointer(pitem))
+		item.point = true
+	} else {
+		oitem := new(objItem)
+		oitem.obj = obj
+		item = (*Item)(unsafe.Pointer(oitem))
+	}
 	item.idLen = uint32(len(id))
 	if len(id) > 0 {
 		data := make([]byte, len(id))
@@ -53,21 +79,21 @@ func New(id string, obj geojson.Object) *Item {
 
 // WeightAndPoints returns the memory weight and number of points for Item.
 func (item *Item) WeightAndPoints() (weight, points int) {
-	_, objIsSpatial := item.obj.(geojson.Spatial)
+	_, objIsSpatial := item.Obj().(geojson.Spatial)
 	if objIsSpatial {
-		points = item.obj.NumPoints()
+		points = item.Obj().NumPoints()
 		weight = points * 16
-	} else if item.obj != nil {
-		weight = len(item.obj.String())
+	} else if item.Obj() != nil {
+		weight = len(item.Obj().String())
 	}
-	weight += int(item.fieldsLen + item.idLen)
+	weight += int(item.fieldsLen) + int(item.idLen)
 	return weight, points
 }
 
 // Less is a btree interface that compares if item is less than other item.
 func (item *Item) Less(other btree.Item, ctx interface{}) bool {
-	value1 := item.obj.String()
-	value2 := other.(*Item).obj.String()
+	value1 := item.Obj().String()
+	value2 := other.(*Item).Obj().String()
 	if value1 < value2 {
 		return true
 	}
@@ -85,7 +111,7 @@ func (item *Item) CopyOverFields(values []float64) {
 	newData := make([]byte, len(fieldBytes)+int(item.idLen))
 	copy(newData, fieldBytes)
 	copy(newData[len(fieldBytes):], oldData[item.fieldsLen:])
-	item.fieldsLen = uint32(len(fieldBytes))
+	item.fieldsLen = uint16(len(fieldBytes))
 	if len(newData) > 0 {
 		item.data = unsafe.Pointer(&newData[0])
 	} else {
@@ -118,7 +144,7 @@ func (item *Item) SetField(index int, value float64) (updated bool) {
 		// copy the id
 		copy(newData[(index+1)*8:], oldBytes[item.fieldsLen:])
 		// update the fields length
-		item.fieldsLen = uint32((index + 1) * 8)
+		item.fieldsLen = uint16((index + 1) * 8)
 		// update the raw data
 		item.data = unsafe.Pointer(&newData[0])
 	}
