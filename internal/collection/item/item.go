@@ -10,10 +10,10 @@ import (
 
 // Item is a item for Tile38 collections
 type Item struct {
-	obj       geojson.Object // geojson or string
 	fieldsLen uint32         // fields block size in bytes, not num of fields
 	idLen     uint32         // id block size in bytes
 	data      unsafe.Pointer // pointer to raw block of bytes
+	obj       geojson.Object // geojson or string
 }
 
 // ID returns the items ID as a string
