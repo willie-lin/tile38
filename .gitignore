@@ -2,6 +2,7 @@
 tile38-*
 !cmd/tile38-*
 *.test
+*.prof
 data*/
 coverage.out
 packages/

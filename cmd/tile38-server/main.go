@@ -7,9 +7,11 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"runtime"
+	"runtime/pprof"
 	"strconv"
 	"strings"
 	"sync"
@@ -32,6 +34,9 @@ var (
 	devMode     bool
 	quiet       bool
 	pidfile     string
+	cpuprofile  string
+	memprofile  string
+	pprofport   int
 )
 
 // TODO: Set to false in 2.*
@@ -51,6 +56,7 @@ func (s *hserver) Send(ctx context.Context, in *hservice.MessageRequest) (*hserv
 }
 
 func main() {
+
 	gitsha := " (" + core.GitSHA + ")"
 	if gitsha == " (0000000)" {
 		gitsha = ""
@@ -240,6 +246,9 @@ Developer Options:
 	flag.BoolVar(&verbose, "v", false, "Enable verbose logging.")
 	flag.BoolVar(&quiet, "q", false, "Quiet logging. Totally silent.")
 	flag.BoolVar(&veryVerbose, "vv", false, "Enable very verbose logging.")
+	flag.IntVar(&pprofport, "pprofport", 0, "pprofport http at port")
+	flag.StringVar(&cpuprofile, "cpuprofile", "", "write cpu profile to `file`")
+	flag.StringVar(&memprofile, "memprofile", "", "write memory profile to `file`")
 	flag.Parse()
 
 	var logw io.Writer = os.Stderr
@@ -259,43 +268,88 @@ Developer Options:
 	core.DevMode = devMode
 	core.ShowDebugMessages = veryVerbose
 
-	hostd := ""
-	if host != "" {
-		hostd = "Addr: " + host + ", "
+	// pprof
+	if cpuprofile != "" {
+		log.Debugf("cpuprofile active")
+		f, err := os.Create(cpuprofile)
+		if err != nil {
+			log.Fatal("could not create CPU profile: ", err)
+		}
+		if err := pprof.StartCPUProfile(f); err != nil {
+			log.Fatal("could not start CPU profile: ", err)
+		}
 	}
-	var pidferr error
+	if memprofile != "" {
+		log.Debug("memprofile active")
+	}
 
-	var cleanedup bool
-	var cleanupMu sync.Mutex
-	cleanup := func() {
-		cleanupMu.Lock()
-		defer cleanupMu.Unlock()
-		if cleanedup {
+	var pprofcleanedup bool
+	var pprofcleanupMu sync.Mutex
+	pprofcleanup := func() {
+		pprofcleanupMu.Lock()
+		defer pprofcleanupMu.Unlock()
+		if pprofcleanedup {
+			return
+		}
+		// cleanup code
+		if cpuprofile != "" {
+			pprof.StopCPUProfile()
+		}
+		if memprofile != "" {
+			f, err := os.Create(memprofile)
+			if err != nil {
+				log.Fatal("could not create memory profile: ", err)
+			}
+			runtime.GC() // get up-to-date statistics
+			if err := pprof.WriteHeapProfile(f); err != nil {
+				log.Fatal("could not write memory profile: ", err)
+			}
+			f.Close()
+		}
+		pprofcleanedup = true
+	}
+	defer pprofcleanup()
+
+	if pprofport != 0 {
+		log.Debugf("pprof http at port %d", pprofport)
+		go func() {
+			log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", pprofport), nil))
+		}()
+	}
+
+	// pid file
+	var pidferr error
+	var pidcleanedup bool
+	var pidcleanupMu sync.Mutex
+	pidcleanup := func() {
+		pidcleanupMu.Lock()
+		defer pidcleanupMu.Unlock()
+		if pidcleanedup {
 			return
 		}
 		// cleanup code
 		if pidfile != "" {
 			os.Remove(pidfile)
 		}
-		cleanedup = true
+		pidcleanedup = true
 	}
-	defer cleanup()
-
+	defer pidcleanup()
 	if pidfile != "" {
 		pidferr := ioutil.WriteFile(pidfile, []byte(fmt.Sprintf("%d\n", os.Getpid())), 0666)
 		if pidferr == nil {
 		}
 	}
 
+	// signal watcher
 	c := make(chan os.Signal, 1)
-
 	signal.Notify(c, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	go func() {
 		s := <-c
 		log.Warnf("signal: %v", s)
 		if pidfile != "" {
-			cleanup()
+			pidcleanup()
 		}
+		pprofcleanup()
 		switch {
 		default:
 			os.Exit(-1)
@@ -309,6 +363,11 @@ Developer Options:
 			os.Exit(0xf)
 		}
 	}()
+
+	hostd := ""
+	if host != "" {
+		hostd = "Addr: " + host + ", "
+	}
 
 	//  _____ _ _     ___ ___
 	// |_   _|_| |___|_  | . |
