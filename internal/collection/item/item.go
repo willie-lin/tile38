@@ -8,12 +8,9 @@ import (
 	"github.com/tidwall/geojson"
 )
 
-// PackedFields indicates that fields are bit packed
-var PackedFields = false
-
 // Item is a item for Tile38 collections
 type Item struct {
-	head [2]uint32      // (1:isPoint,31:fieldsByteLen),(32:idLen)
+	head [2]uint32      // (1:isPoint,1:isPacked,30:fieldsByteLen),(32:idLen)
 	data unsafe.Pointer // pointer to raw block of bytes, fields+id
 }
 type objItem struct {
@@ -27,24 +24,45 @@ type pointItem struct {
 	pt geojson.SimplePoint
 }
 
+func setbit(n uint32, pos uint) uint32 {
+	return n | (1 << pos)
+}
+func unsetbit(n uint32, pos uint) uint32 {
+	return n & ^(1 << pos)
+}
+func hasbit(n uint32, pos uint) bool {
+	return (n & (1 << pos)) != 0
+}
+
 func (item *Item) isPoint() bool {
-	return item.head[0]>>31 == 1
+	return hasbit(item.head[0], 31)
 }
 
 func (item *Item) setIsPoint(isPoint bool) {
 	if isPoint {
-		item.head[0] |= 1 << 31
+		item.head[0] = setbit(item.head[0], 31)
 	} else {
-		item.head[0] = item.head[0] << 1 >> 1
+		item.head[0] = unsetbit(item.head[0], 31)
+	}
+}
+
+func (item *Item) isPacked() bool {
+	return hasbit(item.head[0], 30)
+}
+func (item *Item) setIsPacked(isPacked bool) {
+	if isPacked {
+		item.head[0] = setbit(item.head[0], 30)
+	} else {
+		item.head[0] = unsetbit(item.head[0], 30)
 	}
 }
 
 func (item *Item) fieldsLen() int {
-	return int(item.head[0] << 1 >> 1)
+	return int(item.head[0] & 0x3FFFFFFF)
 }
 
 func (item *Item) setFieldsLen(len int) {
-	item.head[0] = item.head[0]>>31<<31 | uint32(len)
+	item.head[0] = item.head[0]>>30<<30 | uint32(len)
 }
 
 func (item *Item) idLen() int {
@@ -62,15 +80,6 @@ func (item *Item) ID() string {
 		Len:  item.idLen(),
 	}))
 }
-
-// // Fields returns the field values
-// func (item *Item) fields() []float64 {
-// 	return *(*[]float64)((unsafe.Pointer)(&reflect.SliceHeader{
-// 		Data: uintptr(unsafe.Pointer(item.data)),
-// 		Len:  item.fieldsLen() / 8,
-// 		Cap:  item.fieldsLen() / 8,
-// 	}))
-// }
 
 // Fields returns the field values
 func (item *Item) fields() []float64 {
@@ -90,7 +99,7 @@ func (item *Item) Obj() geojson.Object {
 }
 
 // New returns a newly allocated Item
-func New(id string, obj geojson.Object) *Item {
+func New(id string, obj geojson.Object, packed bool) *Item {
 	var item *Item
 	if pt, ok := obj.(*geojson.SimplePoint); ok {
 		pitem := new(pointItem)
@@ -102,6 +111,7 @@ func New(id string, obj geojson.Object) *Item {
 		oitem.obj = obj
 		item = (*Item)(unsafe.Pointer(oitem))
 	}
+	item.setIsPacked(packed)
 	item.setIDLen(len(id))
 	item.data = unsafe.Pointer((*reflect.SliceHeader)(unsafe.Pointer(&id)).Data)
 	return item
@@ -230,15 +240,20 @@ func (item *Item) ForEachField(count int, iter func(value float64) bool) {
 	}
 }
 
+// Packed returns true when the item's fields are packed
+func (item *Item) Packed() bool {
+	return item == nil || item.isPacked()
+}
+
 // GetField returns the value for a field at index.
 func (item *Item) GetField(index int) float64 {
+	if index < 0 {
+		panic("index out of range")
+	}
 	if item == nil {
 		return 0
 	}
-	if PackedFields {
-		if index < 0 {
-			panic("index out of range")
-		}
+	if item.Packed() {
 		var fvalue float64
 		var idx int
 		item.ForEachField(-1, func(value float64) bool {

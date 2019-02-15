@@ -21,6 +21,7 @@ type Collection struct {
 	items    btree.BTree    // items sorted by keys
 	index    rtree.BoxTree  // items geospatially indexed
 	values   *ifbtree.BTree // items sorted by value+key
+	packed   bool
 	fieldMap map[string]int
 	weight   int
 	points   int
@@ -31,8 +32,9 @@ type Collection struct {
 var counter uint64
 
 // New creates an empty collection
-func New() *Collection {
+func New(packed bool) *Collection {
 	col := &Collection{
+		packed:   packed,
 		values:   ifbtree.New(16, nil),
 		fieldMap: make(map[string]int),
 	}
@@ -122,7 +124,7 @@ func (c *Collection) Set(
 	oldObj geojson.Object, oldFields *Fields, newFields *Fields,
 ) {
 	// create the new item
-	newItem := item.New(id, obj)
+	newItem := item.New(id, obj, c.packed)
 
 	// add the new item to main btree and remove the old one if needed
 	var oldItem *item.Item
@@ -389,11 +391,15 @@ func (c *Collection) SearchValuesRange(start, end string, desc bool,
 	}
 	if desc {
 		c.values.DescendRange(
-			item.New("", String(start)), item.New("", String(end)), iter,
+			item.New("", String(start), false),
+			item.New("", String(end), false),
+			iter,
 		)
 	} else {
 		c.values.AscendRange(
-			item.New("", String(start)), item.New("", String(end)), iter,
+			item.New("", String(start), false),
+			item.New("", String(end), false),
+			iter,
 		)
 	}
 	return keepon

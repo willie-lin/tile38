@@ -87,6 +87,7 @@ Advanced Options:
   --protected-mode yes/no : protected mode (default: yes)
   --threads num           : number of network threads (default: num cores)
   --evio yes/no           : use the evio package (default: no)
+  --packed-fields yes/no  : use field packing (default: no)
 
 Developer Options:
   --dev                             : enable developer mode
@@ -178,6 +179,20 @@ Developer Options:
 				}
 			}
 			fmt.Fprintf(os.Stderr, "appendonly must be 'yes' or 'no'\n")
+			os.Exit(1)
+		case "--packed-fields", "-packed-fields":
+			i++
+			if i < len(os.Args) {
+				switch strings.ToLower(os.Args[i]) {
+				case "no":
+					core.PackedFields = false
+					continue
+				case "yes":
+					core.PackedFields = true
+					continue
+				}
+			}
+			fmt.Fprintf(os.Stderr, "packed-fields must be 'yes' or 'no'\n")
 			os.Exit(1)
 		case "--appendfilename", "-appendfilename":
 			i++

@@ -3,7 +3,6 @@ package item
 import (
 	"encoding/json"
 	"math/rand"
-	"reflect"
 	"testing"
 	"time"
 
@@ -31,7 +30,7 @@ func testRandItemHead(t *testing.T, idx int, item *Item) {
 		}
 	}
 	isPoint := rand.Int()%2 == 0
-	fieldsLen := int(rand.Uint32() << 1 >> 1)
+	fieldsLen := int(rand.Uint32() << 2 >> 2)
 	idLen := int(rand.Uint32())
 
 	item.setIsPoint(isPoint)
@@ -63,15 +62,39 @@ func testRandItem(t *testing.T) {
 	keyb := make([]byte, rand.Int()%16)
 	rand.Read(keyb)
 	key := string(keyb)
-	values := make([]float64, rand.Int()%1024)
+
+	packed := rand.Int()%2 == 0
+	values := make([]float64, rand.Int()%64)
 	for i := range values {
-		values[i] = rand.Float64()
+		if packed {
+			switch rand.Int() % 8 {
+			case 0:
+				values[i] = 0
+			case 1:
+				values[i] = 1
+			case 2:
+				values[i] = -1
+			case 3:
+				values[i] = float64(rand.Int() % 120)
+			case 4:
+				values[i] = float64(-(rand.Int() % 120))
+			case 5:
+				values[i] = float64(rand.Float32())
+			case 6:
+				values[i] = float64(rand.Float64())
+			case 7:
+				values[i] = float64(rand.Int()%240) / 10
+			}
+		} else {
+			values[i] = rand.Float64()
+		}
 	}
+
 	var item *Item
 	if rand.Int()%2 == 0 {
-		item = New(key, geojson.NewSimplePoint(geometry.Point{X: 1, Y: 2}))
+		item = New(key, geojson.NewSimplePoint(geometry.Point{X: 1, Y: 2}), packed)
 	} else {
-		item = New(key, geojson.NewPoint(geometry.Point{X: 1, Y: 2}))
+		item = New(key, geojson.NewPoint(geometry.Point{X: 1, Y: 2}), packed)
 	}
 	if item.ID() != key {
 		t.Fatalf("expected '%v', got '%v'", key, item.ID())
@@ -79,7 +102,7 @@ func testRandItem(t *testing.T) {
 
 	var setValues []int
 	for _, i := range rand.Perm(len(values)) {
-		if !item.SetField(i, values[i]) {
+		if !item.SetField(i, values[i]) && values[i] != 0 {
 			t.Fatal("expected true")
 		}
 		setValues = append(setValues, i)
@@ -123,7 +146,7 @@ func testRandItem(t *testing.T) {
 		fvalues = append(fvalues, value)
 		return true
 	})
-	if !reflect.DeepEqual(values, fvalues) {
+	if !floatsEquals(values, fvalues) {
 		t.Fatalf("expected '%v', got  '%v'", values, fvalues)
 	}
 
@@ -144,7 +167,7 @@ func testRandItem(t *testing.T) {
 		fvalues = append(fvalues, value)
 		return true
 	})
-	if !reflect.DeepEqual(values, fvalues) {
+	if !floatsEquals(values, fvalues) {
 		t.Fatalf("expected '%v', got '%v'", 1, len(fvalues))
 	}
 
@@ -168,7 +191,7 @@ func testRandItem(t *testing.T) {
 	if points != 1 {
 		t.Fatalf("expected '%v', got '%v'", 1, points)
 	}
-	if !reflect.DeepEqual(item.fields(), values) {
+	if !floatsEquals(item.fields(), values) {
 		t.Fatalf("expected '%v', got '%v'", values, item.fields())
 	}
 	item.CopyOverFields(item)
@@ -179,10 +202,10 @@ func testRandItem(t *testing.T) {
 	if points != 1 {
 		t.Fatalf("expected '%v', got '%v'", 1, points)
 	}
-	if !reflect.DeepEqual(item.fields(), values) {
+	if !floatsEquals(item.fields(), values) {
 		t.Fatalf("expected '%v', got '%v'", values, item.fields())
 	}
-	if !item.HasFields() {
+	if len(values) > 0 && !item.HasFields() {
 		t.Fatal("expected true")
 	}
 
@@ -213,11 +236,21 @@ func TestItem(t *testing.T) {
 	}
 }
 
+func TestItemFieldOutOfRange(t *testing.T) {
+	var item Item
+	defer func() {
+		if recover() == nil {
+			t.Fatal("expected panic")
+		}
+	}()
+	item.GetField(-1)
+}
+
 func TestItemLess(t *testing.T) {
-	item0 := New("0", testString("0"))
-	item1 := New("1", testString("1"))
-	item2 := New("1", testString("2"))
-	item3 := New("3", testString("2"))
+	item0 := New("0", testString("0"), false)
+	item1 := New("1", testString("1"), false)
+	item2 := New("1", testString("2"), false)
+	item3 := New("3", testString("2"), false)
 	if !item0.Less(item1, nil) {
 		t.Fatal("expected true")
 	}
@@ -292,4 +325,16 @@ func (s testString) NumPoints() int {
 }
 func (s testString) Distance(obj geojson.Object) float64 {
 	return 0
+}
+
+func floatsEquals(a, b []float64) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

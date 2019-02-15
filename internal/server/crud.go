@@ -12,6 +12,7 @@ import (
 	"github.com/tidwall/geojson"
 	"github.com/tidwall/geojson/geometry"
 	"github.com/tidwall/resp"
+	"github.com/tidwall/tile38/core"
 	"github.com/tidwall/tile38/internal/collection"
 	"github.com/tidwall/tile38/internal/glob"
 	"github.com/tidwall/tinybtree"
@@ -784,7 +785,7 @@ func (server *Server) cmdSet(msg *Message) (res resp.Value, d commandDetails, er
 		if xx {
 			goto notok
 		}
-		col = collection.New()
+		col = collection.New(core.PackedFields)
 		server.setCol(d.key, col)
 	}
 	if xx || nx {

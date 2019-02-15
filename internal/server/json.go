@@ -11,6 +11,7 @@ import (
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/resp"
 	"github.com/tidwall/sjson"
+	"github.com/tidwall/tile38/core"
 	"github.com/tidwall/tile38/internal/collection"
 )
 
@@ -194,7 +195,7 @@ func (c *Server) cmdJset(msg *Message) (res resp.Value, d commandDetails, err er
 	col := c.getCol(key)
 	var createcol bool
 	if col == nil {
-		col = collection.New()
+		col = collection.New(core.PackedFields)
 		createcol = true
 	}
 	var json string

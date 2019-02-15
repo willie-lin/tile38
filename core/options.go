@@ -23,3 +23,6 @@ var NumThreads int
 
 // Evio set the networking to use the evio package.
 var Evio = false
+
+// PackedFields activates the memory saving field packing feature.
+var PackedFields = false

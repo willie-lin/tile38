@@ -32,7 +32,7 @@ func (fields *Fields) ForEach(count int, iter func(value float64) bool) {
 	if fields == nil || fields.item == nil {
 		return
 	}
-	if !item.PackedFields {
+	if !fields.item.Packed() {
 		fields.item.ForEachField(count, iter)
 		return
 	}
@@ -65,7 +65,7 @@ func (fields *Fields) Get(index int) float64 {
 	if fields == nil || fields.item == nil {
 		return 0
 	}
-	if !item.PackedFields {
+	if !fields.item.Packed() {
 		return fields.item.GetField(index)
 	}
 	// packed values

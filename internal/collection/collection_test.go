@@ -91,7 +91,7 @@ func bounds(c *Collection) geometry.Rect {
 func TestCollectionNewCollection(t *testing.T) {
 	const numItems = 10000
 	objs := make(map[string]geojson.Object)
-	c := New()
+	c := New(false)
 	for i := 0; i < numItems; i++ {
 		id := strconv.FormatInt(int64(i), 10)
 		var obj geojson.Object
@@ -120,7 +120,7 @@ func TestCollectionNewCollection(t *testing.T) {
 
 func TestCollectionSet(t *testing.T) {
 	t.Run("AddString", func(t *testing.T) {
-		c := New()
+		c := New(false)
 		str1 := String("hello")
 		oldObject, oldFields, newFields := c.Set("str", str1, nil, nil)
 		expect(t, oldObject == nil)
@@ -128,7 +128,7 @@ func TestCollectionSet(t *testing.T) {
 		expect(t, fieldLen(newFields) == 0)
 	})
 	t.Run("UpdateString", func(t *testing.T) {
-		c := New()
+		c := New(false)
 		str1 := String("hello")
 		str2 := String("world")
 		oldObject, oldFields, newFields := c.Set("str", str1, nil, nil)
@@ -141,7 +141,7 @@ func TestCollectionSet(t *testing.T) {
 		expect(t, fieldLen(newFields) == 0)
 	})
 	t.Run("AddPoint", func(t *testing.T) {
-		c := New()
+		c := New(false)
 		point1 := PO(-112.1, 33.1)
 		oldObject, oldFields, newFields := c.Set("point", point1, nil, nil)
 		expect(t, oldObject == nil)
@@ -149,7 +149,7 @@ func TestCollectionSet(t *testing.T) {
 		expect(t, fieldLen(newFields) == 0)
 	})
 	t.Run("UpdatePoint", func(t *testing.T) {
-		c := New()
+		c := New(false)
 		point1 := PO(-112.1, 33.1)
 		point2 := PO(-112.2, 33.2)
 		oldObject, oldFields, newFields := c.Set("point", point1, nil, nil)
@@ -162,7 +162,7 @@ func TestCollectionSet(t *testing.T) {
 		expect(t, fieldLen(newFields) == 0)
 	})
 	t.Run("Fields", func(t *testing.T) {
-		c := New()
+		c := New(false)
 		str1 := String("hello")
 		str2 := String("jello")
 		{
@@ -190,7 +190,7 @@ func TestCollectionSet(t *testing.T) {
 		}
 	})
 	t.Run("Delete", func(t *testing.T) {
-		c := New()
+		c := New(false)
 
 		c.Set("1", String("1"), nil, nil)
 		c.Set("2", String("2"), nil, nil)
@@ -302,7 +302,7 @@ func fieldIterEquals(fields *Fields, values []float64) bool {
 
 func TestCollectionScan(t *testing.T) {
 	N := 256
-	c := New()
+	c := New(false)
 	for _, i := range rand.Perm(N) {
 		id := fmt.Sprintf("%04d", i)
 		c.Set(id, String(id), []string{"ex"}, []float64{float64(i)})
@@ -387,7 +387,7 @@ func TestCollectionScan(t *testing.T) {
 
 func TestCollectionSearch(t *testing.T) {
 	N := 256
-	c := New()
+	c := New(false)
 	for i, j := range rand.Perm(N) {
 		id := fmt.Sprintf("%04d", j)
 		ex := fmt.Sprintf("%04d", i)
@@ -446,7 +446,7 @@ func TestCollectionSearch(t *testing.T) {
 }
 
 func TestCollectionWeight(t *testing.T) {
-	c := New()
+	c := New(false)
 	c.Set("1", String("1"), nil, nil)
 	expect(t, c.TotalWeight() > 0)
 	c.Delete("1")
@@ -503,7 +503,7 @@ func TestSpatialSearch(t *testing.T) {
 	q3, _ := geojson.Parse(gjson.Get(json, `features.#[id=="q3"]`).Raw, nil)
 	q4, _ := geojson.Parse(gjson.Get(json, `features.#[id=="q4"]`).Raw, nil)
 
-	c := New()
+	c := New(false)
 	c.Set("p1", p1, nil, nil)
 	c.Set("p2", p2, nil, nil)
 	c.Set("p3", p3, nil, nil)
@@ -597,7 +597,7 @@ func TestCollectionSparse(t *testing.T) {
 		Max: geometry.Point{X: -71.37302, Y: 42.607937},
 	})
 	N := 10000
-	c := New()
+	c := New(false)
 	r := rect.Rect()
 	for i := 0; i < N; i++ {
 		x := (r.Max.X-r.Min.X)*rand.Float64() + r.Min.X
@@ -692,7 +692,7 @@ func TestManyCollections(t *testing.T) {
 			obj := geojson.Object(PO(p.X, p.Y))
 			col, ok := colsM[key]
 			if !ok {
-				col = New()
+				col = New(false)
 				colsM[key] = col
 			}
 			col.Set(id, obj, nil, nil)
@@ -726,7 +726,7 @@ func BenchmarkInsert(t *testing.B) {
 			PO(rand.Float64()*360-180, rand.Float64()*180-90),
 		}
 	}
-	col := New()
+	col := New(false)
 	t.ResetTimer()
 	for i := 0; i < t.N; i++ {
 		col.Set(items[i].id, items[i].object, nil, nil)
@@ -742,7 +742,7 @@ func BenchmarkReplace(t *testing.B) {
 			PO(rand.Float64()*360-180, rand.Float64()*180-90),
 		}
 	}
-	col := New()
+	col := New(false)
 	for i := 0; i < t.N; i++ {
 		col.Set(items[i].id, items[i].object, nil, nil)
 	}
@@ -764,7 +764,7 @@ func BenchmarkGet(t *testing.B) {
 			PO(rand.Float64()*360-180, rand.Float64()*180-90),
 		}
 	}
-	col := New()
+	col := New(false)
 	for i := 0; i < t.N; i++ {
 		col.Set(items[i].id, items[i].object, nil, nil)
 	}
@@ -786,7 +786,7 @@ func BenchmarkRemove(t *testing.B) {
 			PO(rand.Float64()*360-180, rand.Float64()*180-90),
 		}
 	}
-	col := New()
+	col := New(false)
 	for i := 0; i < t.N; i++ {
 		col.Set(items[i].id, items[i].object, nil, nil)
 	}
