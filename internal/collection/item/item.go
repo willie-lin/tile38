@@ -72,11 +72,7 @@ func New(id string, obj geojson.Object) *Item {
 		item = (*Item)(unsafe.Pointer(oitem))
 	}
 	item.idLen = uint32(len(id))
-	if len(id) > 0 {
-		data := make([]byte, len(id))
-		copy(data, id)
-		item.data = unsafe.Pointer(&data[0])
-	}
+	item.data = unsafe.Pointer((*reflect.SliceHeader)(unsafe.Pointer(&id)).Data)
 	return item
 }
 

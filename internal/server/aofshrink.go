@@ -240,7 +240,7 @@ func (server *Server) aofshrink() {
 			defer server.mu.Unlock()
 
 			// flush the aof buffer
-			server.flushAOF()
+			server.flushAOF(false)
 
 			aofbuf = aofbuf[:0]
 			for _, values := range server.shrinklog {

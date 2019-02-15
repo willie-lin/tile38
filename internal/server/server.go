@@ -252,7 +252,7 @@ func Serve(host string, port int, dir string, http bool) error {
 			return err
 		}
 		defer func() {
-			server.flushAOF()
+			server.flushAOF(false)
 			server.aof.Sync()
 		}()
 	}
@@ -268,6 +268,7 @@ func Serve(host string, port int, dir string, http bool) error {
 	go server.watchLuaStatePool()
 	go server.watchAutoGC()
 	go server.backgroundExpiring()
+	go server.backgroundSyncAOF()
 	defer func() {
 		// Stop background routines
 		server.followc.add(1) // this will force any follow communication to die
@@ -489,7 +490,7 @@ func (server *Server) evioServe() error {
 		if atomic.LoadInt32(&server.aofdirty) != 0 {
 			server.mu.Lock()
 			defer server.mu.Unlock()
-			server.flushAOF()
+			server.flushAOF(false)
 			atomic.StoreInt32(&server.aofdirty, 1)
 		}
 	}
@@ -667,7 +668,7 @@ func (server *Server) netServe() error {
 							// prewrite
 							server.mu.Lock()
 							defer server.mu.Unlock()
-							server.flushAOF()
+							server.flushAOF(false)
 						}()
 						atomic.StoreInt32(&server.aofdirty, 0)
 					}
@@ -755,23 +756,21 @@ func (server *Server) watchOutOfMemory() {
 	defer t.Stop()
 	var mem runtime.MemStats
 	for range t.C {
-		func() {
-			if server.stopServer.on() {
-				return
-			}
-			oom := server.outOfMemory.on()
-			if server.config.maxMemory() == 0 {
-				if oom {
-					server.outOfMemory.set(false)
-				}
-				return
-			}
+		if server.stopServer.on() {
+			return
+		}
+		oom := server.outOfMemory.on()
+		if server.config.maxMemory() == 0 {
 			if oom {
-				runtime.GC()
+				server.outOfMemory.set(false)
 			}
-			runtime.ReadMemStats(&mem)
-			server.outOfMemory.set(int(mem.HeapAlloc) > server.config.maxMemory())
-		}()
+			return
+		}
+		if oom {
+			runtime.GC()
+		}
+		runtime.ReadMemStats(&mem)
+		server.outOfMemory.set(int(mem.HeapAlloc) > server.config.maxMemory())
 	}
 }
 
@@ -779,9 +778,26 @@ func (server *Server) watchLuaStatePool() {
 	t := time.NewTicker(time.Second * 10)
 	defer t.Stop()
 	for range t.C {
-		func() {
-			server.luapool.Prune()
-		}()
+		if server.stopServer.on() {
+			return
+		}
+		server.luapool.Prune()
+	}
+}
+
+func (server *Server) backgroundSyncAOF() {
+	t := time.NewTicker(time.Second)
+	defer t.Stop()
+	for range t.C {
+		if server.stopServer.on() {
+			return
+		}
+		server.mu.Lock()
+		if len(server.aofbuf) > 0 {
+			server.flushAOF(true)
+		}
+		server.aofbuf = nil
+		server.mu.Unlock()
 	}
 }
 

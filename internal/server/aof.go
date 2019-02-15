@@ -115,11 +115,16 @@ func commandErrIsFatal(err error) bool {
 	return true
 }
 
-func (server *Server) flushAOF() {
+func (server *Server) flushAOF(sync bool) {
 	if len(server.aofbuf) > 0 {
 		_, err := server.aof.Write(server.aofbuf)
 		if err != nil {
 			panic(err)
+		}
+		if sync {
+			if err := server.aof.Sync(); err != nil {
+				panic(err)
+			}
 		}
 		server.aofbuf = server.aofbuf[:0]
 	}

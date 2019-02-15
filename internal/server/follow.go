@@ -165,7 +165,7 @@ func (c *Server) followHandleCommand(args []string, followc int, w io.Writer) (i
 		return c.aofsz, err
 	}
 	if len(c.aofbuf) > 10240 {
-		c.flushAOF()
+		c.flushAOF(false)
 	}
 	return c.aofsz, nil
 }
@@ -301,7 +301,7 @@ func (c *Server) followStep(host string, port int, followc int) error {
 			if aofsz >= int(aofSize) {
 				caughtUp = true
 				c.mu.Lock()
-				c.flushAOF()
+				c.flushAOF(false)
 				c.fcup = true
 				c.fcuponce = true
 				c.mu.Unlock()
