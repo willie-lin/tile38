@@ -8,6 +8,9 @@ import (
 	"github.com/tidwall/geojson"
 )
 
+// PackedFields indicates that fields are bit packed
+const PackedFields = true
+
 // Item is a item for Tile38 collections
 type Item struct {
 	point     bool           // true: Item is pointItem, false: Item is objItem

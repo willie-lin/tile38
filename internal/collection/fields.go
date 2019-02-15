@@ -1,17 +1,29 @@
 package collection
 
-import "github.com/tidwall/tile38/internal/collection/item"
+import (
+	"sync"
 
-// // FieldIter ...
-// type FieldIter interface {
-// 	ForEachField(count int, iter func(value float64) bool)
-// 	GetField(index int) float64
-// 	HasFields() bool
-// }
+	"github.com/tidwall/tile38/internal/collection/item"
+)
 
 // Fields ...
 type Fields struct {
-	item *item.Item
+	mu       sync.Mutex
+	unpacked bool       // fields have been unpacked
+	values   []float64  // unpacked values
+	item     *item.Item // base item
+}
+
+func (fields *Fields) unpack() {
+	if fields.unpacked {
+		return
+	}
+	fields.values = nil
+	fields.item.ForEachField(-1, func(value float64) bool {
+		fields.values = append(fields.values, value)
+		return true
+	})
+	fields.unpacked = true
 }
 
 // ForEach iterates over each field. The count param is the number of
@@ -20,7 +32,31 @@ func (fields *Fields) ForEach(count int, iter func(value float64) bool) {
 	if fields == nil || fields.item == nil {
 		return
 	}
-	fields.item.ForEachField(count, iter)
+	if !item.PackedFields {
+		fields.item.ForEachField(count, iter)
+		return
+	}
+	// packed values
+	fields.mu.Lock()
+	defer fields.mu.Unlock()
+	if !fields.unpacked {
+		fields.unpack()
+	}
+	var n int
+	if count < 0 {
+		n = len(fields.values)
+	} else {
+		n = count
+	}
+	for i := 0; i < n; i++ {
+		var field float64
+		if i < len(fields.values) {
+			field = fields.values[i]
+		}
+		if !iter(field) {
+			return
+		}
+	}
 }
 
 // Get returns the value for a field at index. If there is no field at index,
@@ -29,7 +65,20 @@ func (fields *Fields) Get(index int) float64 {
 	if fields == nil || fields.item == nil {
 		return 0
 	}
-	return fields.item.GetField(index)
+	if !item.PackedFields {
+		return fields.item.GetField(index)
+	}
+	// packed values
+	fields.mu.Lock()
+	if !fields.unpacked {
+		fields.unpack()
+	}
+	var value float64
+	if index < len(fields.values) {
+		value = fields.values[index]
+	}
+	fields.mu.Unlock()
+	return value
 }
 
 func itemFields(item *item.Item) *Fields {
