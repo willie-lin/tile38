@@ -47,19 +47,19 @@ const (
 // commandDetails is detailed information about a mutable command. It's used
 // for geofence formulas.
 type commandDetails struct {
-	command   string            // client command, like "SET" or "DEL"
-	key, id   string            // collection key and object id of object
-	newKey    string            // new key, for RENAME command
-	fmap      map[string]int    // map of field names to value indexes
-	obj       geojson.Object    // new object
-	fields    []float64         // array of field values
-	oldObj    geojson.Object    // previous object, if any
-	oldFields []float64         // previous object field values
-	updated   bool              // object was updated
-	timestamp time.Time         // timestamp when the update occured
-	parent    bool              // when true, only children are forwarded
-	pattern   string            // PDEL key pattern
-	children  []*commandDetails // for multi actions such as "PDEL"
+	command   string             // client command, like "SET" or "DEL"
+	key, id   string             // collection key and object id of object
+	newKey    string             // new key, for RENAME command
+	obj       geojson.Object     // new object
+	fmap      map[string]int     // map of field names to value indexes
+	fields    *collection.Fields // array of field values
+	oldObj    geojson.Object     // previous object, if any
+	oldFields *collection.Fields // previous object field values
+	updated   bool               // object was updated
+	timestamp time.Time          // timestamp when the update occured
+	parent    bool               // when true, only children are forwarded
+	pattern   string             // PDEL key pattern
+	children  []*commandDetails  // for multi actions such as "PDEL"
 }
 
 // Server is a tile38 controller

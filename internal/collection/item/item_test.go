@@ -19,7 +19,12 @@ func testRandItem(t *testing.T) {
 	for i := range values {
 		values[i] = rand.Float64()
 	}
-	item := New(key, geojson.NewPoint(geometry.Point{X: 1, Y: 2}))
+	var item *Item
+	if rand.Int()%2 == 0 {
+		item = New(key, geojson.NewSimplePoint(geometry.Point{X: 1, Y: 2}))
+	} else {
+		item = New(key, geojson.NewPoint(geometry.Point{X: 1, Y: 2}))
+	}
 	if item.ID() != key {
 		t.Fatalf("expected '%v', got '%v'", key, item.ID())
 	}
@@ -38,7 +43,7 @@ func testRandItem(t *testing.T) {
 				t.Fatalf("expected '%v', got '%v'", values[i], item.GetField(i))
 			}
 		}
-		fields := item.Fields()
+		fields := item.fields()
 		for i := 0; i < len(fields); i++ {
 			for _, j := range setValues {
 				if i == j {
@@ -65,6 +70,42 @@ func testRandItem(t *testing.T) {
 			t.Fatal("expected false")
 		}
 	}
+	var fvalues []float64
+	item.ForEachField(len(values), func(value float64) bool {
+		fvalues = append(fvalues, value)
+		return true
+	})
+	if !reflect.DeepEqual(values, fvalues) {
+		t.Fatalf("expected '%v', got  '%v'", values, fvalues)
+	}
+
+	fvalues = nil
+	item.ForEachField(len(values), func(value float64) bool {
+		if len(fvalues) == 1 {
+			return false
+		}
+		fvalues = append(fvalues, value)
+		return true
+	})
+	if len(values) > 0 && len(fvalues) != 1 {
+		t.Fatalf("expected '%v', got '%v'", 1, len(fvalues))
+	}
+
+	fvalues = nil
+	item.ForEachField(-1, func(value float64) bool {
+		fvalues = append(fvalues, value)
+		return true
+	})
+	if !reflect.DeepEqual(values, fvalues) {
+		t.Fatalf("expected '%v', got '%v'", 1, len(fvalues))
+	}
+
+	// should not fail, must allow nil receiver
+	(*Item)(nil).ForEachField(1, nil)
+	if (*Item)(nil).GetField(1) != 0 {
+		t.Fatalf("expected '%v', got '%v'", 0, (*Item)(nil).GetField(1))
+	}
+
 	if item.ID() != key {
 		t.Fatalf("expected '%v', got '%v'", key, item.ID())
 	}
@@ -79,8 +120,22 @@ func testRandItem(t *testing.T) {
 	if points != 1 {
 		t.Fatalf("expected '%v', got '%v'", 1, points)
 	}
-	if !reflect.DeepEqual(item.Fields(), values) {
-		t.Fatalf("expected '%v', got '%v'", values, item.Fields())
+	if !reflect.DeepEqual(item.fields(), values) {
+		t.Fatalf("expected '%v', got '%v'", values, item.fields())
+	}
+	item.CopyOverFields(item)
+	weight, points = item.WeightAndPoints()
+	if weight != len(values)*8+len(key)+points*16 {
+		t.Fatalf("expected '%v', got '%v'", len(values)*8+len(key)+points*16, weight)
+	}
+	if points != 1 {
+		t.Fatalf("expected '%v', got '%v'", 1, points)
+	}
+	if !reflect.DeepEqual(item.fields(), values) {
+		t.Fatalf("expected '%v', got '%v'", values, item.fields())
+	}
+	if !item.HasFields() {
+		t.Fatal("expected true")
 	}
 
 	item.CopyOverFields(nil)
@@ -91,12 +146,16 @@ func testRandItem(t *testing.T) {
 	if points != 1 {
 		t.Fatalf("expected '%v', got '%v'", 1, points)
 	}
-	if len(item.Fields()) != 0 {
-		t.Fatalf("expected '%#v', got '%#v'", 0, len(item.Fields()))
+	if len(item.fields()) != 0 {
+		t.Fatalf("expected '%#v', got '%#v'", 0, len(item.fields()))
 	}
 	if item.ID() != key {
 		t.Fatalf("expected '%v', got '%v'", key, item.ID())
 	}
+	if item.HasFields() {
+		t.Fatal("expected false")
+	}
+
 }
 
 func TestItem(t *testing.T) {

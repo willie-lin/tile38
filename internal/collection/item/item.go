@@ -39,7 +39,7 @@ func (item *Item) ID() string {
 }
 
 // Fields returns the field values
-func (item *Item) Fields() []float64 {
+func (item *Item) fields() []float64 {
 	return *(*[]float64)((unsafe.Pointer)(&reflect.SliceHeader{
 		Data: uintptr(unsafe.Pointer(item.data)),
 		Len:  int(item.fieldsLen) / 8,
@@ -104,8 +104,15 @@ func (item *Item) Less(other btree.Item, ctx interface{}) bool {
 	return item.ID() < other.(*Item).ID()
 }
 
-// CopyOverFields overwriting previous fields
-func (item *Item) CopyOverFields(values []float64) {
+// CopyOverFields overwriting previous fields. Accepts an *Item or []float64
+func (item *Item) CopyOverFields(from interface{}) {
+	var values []float64
+	switch from := from.(type) {
+	case *Item:
+		values = from.fields()
+	case []float64:
+		values = from
+	}
 	fieldBytes := floatsToBytes(values)
 	oldData := item.dataBytes()
 	newData := make([]byte, len(fieldBytes)+int(item.idLen))
@@ -153,15 +160,6 @@ func (item *Item) SetField(index int, value float64) (updated bool) {
 	return true
 }
 
-// GetField returns the value for a field at index.
-func (item *Item) GetField(index int) float64 {
-	numFields := int(item.fieldsLen / 8)
-	if index < numFields {
-		return getFieldAt(item.data, index)
-	}
-	return 0
-}
-
 func (item *Item) dataBytes() []byte {
 	return *(*[]byte)((unsafe.Pointer)(&reflect.SliceHeader{
 		Data: uintptr(unsafe.Pointer(item.data)),
@@ -176,4 +174,45 @@ func floatsToBytes(f []float64) []byte {
 		Len:  len(f) * 8,
 		Cap:  len(f) * 8,
 	}))
+}
+
+// ForEachField iterates over each field. The count param is the number of
+// iterations. When count is less than zero, then all fields are returns.
+func (item *Item) ForEachField(count int, iter func(value float64) bool) {
+	if item == nil {
+		return
+	}
+	fields := item.fields()
+	var n int
+	if count < 0 {
+		n = len(fields)
+	} else {
+		n = count
+	}
+	for i := 0; i < n; i++ {
+		var field float64
+		if i < len(fields) {
+			field = fields[i]
+		}
+		if !iter(field) {
+			return
+		}
+	}
+}
+
+// GetField returns the value for a field at index.
+func (item *Item) GetField(index int) float64 {
+	if item == nil {
+		return 0
+	}
+	numFields := int(item.fieldsLen / 8)
+	if index < numFields {
+		return getFieldAt(item.data, index)
+	}
+	return 0
+}
+
+// HasFields returns true when item has fields
+func (item *Item) HasFields() bool {
+	return item != nil && item.fieldsLen > 0
 }

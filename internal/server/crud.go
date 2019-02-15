@@ -34,16 +34,14 @@ func (a byField) Swap(i, j int) {
 	a[i], a[j] = a[j], a[i]
 }
 
-func orderFields(fmap map[string]int, fields []float64) []fvt {
+func orderFields(fmap map[string]int, fields *collection.Fields) []fvt {
 	var fv fvt
 	fvs := make([]fvt, 0, len(fmap))
 	for field, idx := range fmap {
-		if idx < len(fields) {
-			fv.field = field
-			fv.value = fields[idx]
-			if fv.value != 0 {
-				fvs = append(fvs, fv)
-			}
+		fv.field = field
+		fv.value = fields.Get(idx)
+		if fv.value != 0 {
+			fvs = append(fvs, fv)
 		}
 	}
 	sort.Sort(byField(fvs))
@@ -352,7 +350,7 @@ func (server *Server) cmdPdel(msg *Message) (res resp.Value, d commandDetails, e
 		return
 	}
 	now := time.Now()
-	iter := func(id string, o geojson.Object, fields []float64) bool {
+	iter := func(id string, o geojson.Object, fields *collection.Fields) bool {
 		if match, _ := glob.Match(d.pattern, id); match {
 			d.children = append(d.children, &commandDetails{
 				command:   "del",

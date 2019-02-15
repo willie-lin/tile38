@@ -9,6 +9,7 @@ import (
 	"github.com/tidwall/geojson/geo"
 	"github.com/tidwall/geojson/geometry"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/tile38/internal/collection"
 	"github.com/tidwall/tile38/internal/glob"
 )
 
@@ -284,7 +285,7 @@ func extendRoamMessage(
 			}
 			pattern := match.id + fence.roam.scan
 			iterator := func(
-				oid string, o geojson.Object, fields []float64,
+				oid string, o geojson.Object, fields *collection.Fields,
 			) bool {
 				if oid == match.id {
 					return true
@@ -371,7 +372,7 @@ func fenceMatchRoam(
 		Max: geometry.Point{X: maxLon, Y: maxLat},
 	}
 	col.Intersects(geojson.NewRect(rect), 0, nil, func(
-		id string, obj2 geojson.Object, fields []float64,
+		id string, obj2 geojson.Object, fields *collection.Fields,
 	) bool {
 		if c.hasExpired(fence.roam.key, id) {
 			return true

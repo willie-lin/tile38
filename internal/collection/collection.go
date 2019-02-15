@@ -119,39 +119,39 @@ func (c *Collection) delItem(item *item.Item) {
 func (c *Collection) Set(
 	id string, obj geojson.Object, fields []string, values []float64,
 ) (
-	oldObj geojson.Object, oldFields []float64, newFields []float64,
+	oldObj geojson.Object, oldFields *Fields, newFields *Fields,
 ) {
 	// create the new item
-	item := item.New(id, obj)
+	newItem := item.New(id, obj)
 
 	// add the new item to main btree and remove the old one if needed
-	oldItemV, ok := c.items.Set(item)
+	var oldItem *item.Item
+	oldItemV, ok := c.items.Set(newItem)
 	if ok {
-		oldItem := oldItemV
+		oldItem = oldItemV
 		oldObj = oldItem.Obj()
 
 		// remove old item from indexes
 		c.delItem(oldItem)
-		if len(oldItem.Fields()) > 0 {
+		if oldItem.HasFields() {
 			// merge old and new fields
-			oldFields = oldItem.Fields()
-			item.CopyOverFields(oldFields)
+			newItem.CopyOverFields(oldItem)
 		}
 	}
 
 	if fields == nil && len(values) > 0 {
 		// directly set the field values, from copy
-		item.CopyOverFields(values)
+		newItem.CopyOverFields(values)
 	} else if len(fields) > 0 {
 		// add new field to new item
-		c.setFields(item, fields, values, false)
+		c.setFields(newItem, fields, values, false)
 	}
 
 	// add new item to indexes
-	c.addItem(item)
+	c.addItem(newItem)
 	// fmt.Printf("!!! %#v\n", oldObj)
 
-	return oldObj, oldFields, item.Fields()
+	return oldObj, itemFields(oldItem), itemFields(newItem)
 }
 
 func (c *Collection) setFields(
@@ -192,7 +192,7 @@ func (c *Collection) setField(
 // Delete removes an object and returns it.
 // If the object does not exist then the 'ok' return value will be false.
 func (c *Collection) Delete(id string) (
-	obj geojson.Object, fields []float64, ok bool,
+	obj geojson.Object, fields *Fields, ok bool,
 ) {
 	oldItemV, ok := c.items.Delete(id)
 	if !ok {
@@ -202,13 +202,13 @@ func (c *Collection) Delete(id string) (
 
 	c.delItem(oldItem)
 
-	return oldItem.Obj(), oldItem.Fields(), true
+	return oldItem.Obj(), itemFields(oldItem), true
 }
 
 // Get returns an object.
 // If the object does not exist then the 'ok' return value will be false.
 func (c *Collection) Get(id string) (
-	obj geojson.Object, fields []float64, ok bool,
+	obj geojson.Object, fields *Fields, ok bool,
 ) {
 	itemV, ok := c.items.Get(id)
 	if !ok {
@@ -216,13 +216,13 @@ func (c *Collection) Get(id string) (
 	}
 	item := itemV
 
-	return item.Obj(), item.Fields(), true
+	return item.Obj(), itemFields(item), true
 }
 
 // SetField set a field value for an object and returns that object.
 // If the object does not exist then the 'ok' return value will be false.
 func (c *Collection) SetField(id, fieldName string, fieldValue float64) (
-	obj geojson.Object, fields []float64, updated bool, ok bool,
+	obj geojson.Object, fields *Fields, updated bool, ok bool,
 ) {
 	itemV, ok := c.items.Get(id)
 	if !ok {
@@ -230,13 +230,13 @@ func (c *Collection) SetField(id, fieldName string, fieldValue float64) (
 	}
 	item := itemV
 	updated = c.setField(item, fieldName, fieldValue, true)
-	return item.Obj(), item.Fields(), updated, true
+	return item.Obj(), itemFields(item), updated, true
 }
 
 // SetFields is similar to SetField, just setting multiple fields at once
 func (c *Collection) SetFields(
 	id string, fieldNames []string, fieldValues []float64,
-) (obj geojson.Object, fields []float64, updatedCount int, ok bool) {
+) (obj geojson.Object, fields *Fields, updatedCount int, ok bool) {
 	itemV, ok := c.items.Get(id)
 	if !ok {
 		return nil, nil, 0, false
@@ -245,7 +245,7 @@ func (c *Collection) SetFields(
 
 	updatedCount = c.setFields(item, fieldNames, fieldValues, true)
 
-	return item.Obj(), item.Fields(), updatedCount, true
+	return item.Obj(), itemFields(item), updatedCount, true
 }
 
 // FieldMap return a maps of the field names.
@@ -264,7 +264,7 @@ func (c *Collection) FieldArr() []string {
 
 // Scan iterates though the collection ids.
 func (c *Collection) Scan(desc bool, cursor Cursor,
-	iterator func(id string, obj geojson.Object, fields []float64) bool,
+	iterator func(id string, obj geojson.Object, fields *Fields) bool,
 ) bool {
 	var keepon = true
 	var count uint64
@@ -281,7 +281,7 @@ func (c *Collection) Scan(desc bool, cursor Cursor,
 		if cursor != nil {
 			cursor.Step(1)
 		}
-		keepon = iterator(item.ID(), item.Obj(), item.Fields())
+		keepon = iterator(item.ID(), item.Obj(), itemFields(item))
 		return keepon
 	}
 	if desc {
@@ -294,7 +294,7 @@ func (c *Collection) Scan(desc bool, cursor Cursor,
 
 // ScanRange iterates though the collection starting with specified id.
 func (c *Collection) ScanRange(start, end string, desc bool, cursor Cursor,
-	iterator func(id string, obj geojson.Object, fields []float64) bool,
+	iterator func(id string, obj geojson.Object, fields *Fields) bool,
 ) bool {
 	var keepon = true
 	var count uint64
@@ -320,7 +320,7 @@ func (c *Collection) ScanRange(start, end string, desc bool, cursor Cursor,
 				return false
 			}
 		}
-		keepon = iterator(item.ID(), item.Obj(), item.Fields())
+		keepon = iterator(item.ID(), item.Obj(), itemFields(item))
 		return keepon
 	}
 
@@ -334,7 +334,7 @@ func (c *Collection) ScanRange(start, end string, desc bool, cursor Cursor,
 
 // SearchValues iterates though the collection values.
 func (c *Collection) SearchValues(desc bool, cursor Cursor,
-	iterator func(id string, obj geojson.Object, fields []float64) bool,
+	iterator func(id string, obj geojson.Object, fields *Fields) bool,
 ) bool {
 	var keepon = true
 	var count uint64
@@ -352,7 +352,7 @@ func (c *Collection) SearchValues(desc bool, cursor Cursor,
 			cursor.Step(1)
 		}
 		iitm := v.(*item.Item)
-		keepon = iterator(iitm.ID(), iitm.Obj(), iitm.Fields())
+		keepon = iterator(iitm.ID(), iitm.Obj(), itemFields(iitm))
 		return keepon
 	}
 	if desc {
@@ -366,7 +366,7 @@ func (c *Collection) SearchValues(desc bool, cursor Cursor,
 // SearchValuesRange iterates though the collection values.
 func (c *Collection) SearchValuesRange(start, end string, desc bool,
 	cursor Cursor,
-	iterator func(id string, obj geojson.Object, fields []float64) bool,
+	iterator func(id string, obj geojson.Object, fields *Fields) bool,
 ) bool {
 	var keepon = true
 	var count uint64
@@ -384,7 +384,7 @@ func (c *Collection) SearchValuesRange(start, end string, desc bool,
 			cursor.Step(1)
 		}
 		iitm := v.(*item.Item)
-		keepon = iterator(iitm.ID(), iitm.Obj(), iitm.Fields())
+		keepon = iterator(iitm.ID(), iitm.Obj(), itemFields(iitm))
 		return keepon
 	}
 	if desc {
@@ -402,7 +402,7 @@ func (c *Collection) SearchValuesRange(start, end string, desc bool,
 // ScanGreaterOrEqual iterates though the collection starting with specified id.
 func (c *Collection) ScanGreaterOrEqual(id string, desc bool,
 	cursor Cursor,
-	iterator func(id string, obj geojson.Object, fields []float64) bool,
+	iterator func(id string, obj geojson.Object, fields *Fields) bool,
 ) bool {
 	var keepon = true
 	var count uint64
@@ -419,7 +419,7 @@ func (c *Collection) ScanGreaterOrEqual(id string, desc bool,
 		if cursor != nil {
 			cursor.Step(1)
 		}
-		keepon = iterator(item.ID(), item.Obj(), item.Fields())
+		keepon = iterator(item.ID(), item.Obj(), itemFields(item))
 		return keepon
 	}
 	if desc {
@@ -432,7 +432,7 @@ func (c *Collection) ScanGreaterOrEqual(id string, desc bool,
 
 func (c *Collection) geoSearch(
 	rect geometry.Rect,
-	iter func(id string, obj geojson.Object, fields []float64) bool,
+	iter func(id string, obj geojson.Object, fields *Fields) bool,
 ) bool {
 	alive := true
 	c.index.Search(
@@ -440,7 +440,7 @@ func (c *Collection) geoSearch(
 		[]float64{rect.Max.X, rect.Max.Y},
 		func(_, _ []float64, itemv *item.Item) bool {
 			item := itemv
-			alive = iter(item.ID(), item.Obj(), item.Fields())
+			alive = iter(item.ID(), item.Obj(), itemFields(item))
 			return alive
 		},
 	)
@@ -449,12 +449,12 @@ func (c *Collection) geoSearch(
 
 func (c *Collection) geoSparse(
 	obj geojson.Object, sparse uint8,
-	iter func(id string, obj geojson.Object, fields []float64) (match, ok bool),
+	iter func(id string, obj geojson.Object, fields *Fields) (match, ok bool),
 ) bool {
 	matches := make(map[string]bool)
 	alive := true
 	c.geoSparseInner(obj.Rect(), sparse,
-		func(id string, o geojson.Object, fields []float64) (
+		func(id string, o geojson.Object, fields *Fields) (
 			match, ok bool,
 		) {
 			ok = true
@@ -471,7 +471,7 @@ func (c *Collection) geoSparse(
 }
 func (c *Collection) geoSparseInner(
 	rect geometry.Rect, sparse uint8,
-	iter func(id string, obj geojson.Object, fields []float64) (match, ok bool),
+	iter func(id string, obj geojson.Object, fields *Fields) (match, ok bool),
 ) bool {
 	if sparse > 0 {
 		w := rect.Max.X - rect.Min.X
@@ -503,7 +503,7 @@ func (c *Collection) geoSparseInner(
 	}
 	alive := true
 	c.geoSearch(rect,
-		func(id string, obj geojson.Object, fields []float64) bool {
+		func(id string, obj geojson.Object, fields *Fields) bool {
 			match, ok := iter(id, obj, fields)
 			if !ok {
 				alive = false
@@ -521,7 +521,7 @@ func (c *Collection) Within(
 	obj geojson.Object,
 	sparse uint8,
 	cursor Cursor,
-	iter func(id string, obj geojson.Object, fields []float64) bool,
+	iter func(id string, obj geojson.Object, fields *Fields) bool,
 ) bool {
 	var count uint64
 	var offset uint64
@@ -531,7 +531,7 @@ func (c *Collection) Within(
 	}
 	if sparse > 0 {
 		return c.geoSparse(obj, sparse,
-			func(id string, o geojson.Object, fields []float64) (
+			func(id string, o geojson.Object, fields *Fields) (
 				match, ok bool,
 			) {
 				count++
@@ -549,7 +549,7 @@ func (c *Collection) Within(
 		)
 	}
 	return c.geoSearch(obj.Rect(),
-		func(id string, o geojson.Object, fields []float64) bool {
+		func(id string, o geojson.Object, fields *Fields) bool {
 			count++
 			if count <= offset {
 				return true
@@ -571,7 +571,7 @@ func (c *Collection) Intersects(
 	obj geojson.Object,
 	sparse uint8,
 	cursor Cursor,
-	iter func(id string, obj geojson.Object, fields []float64) bool,
+	iter func(id string, obj geojson.Object, fields *Fields) bool,
 ) bool {
 	var count uint64
 	var offset uint64
@@ -581,7 +581,7 @@ func (c *Collection) Intersects(
 	}
 	if sparse > 0 {
 		return c.geoSparse(obj, sparse,
-			func(id string, o geojson.Object, fields []float64) (
+			func(id string, o geojson.Object, fields *Fields) (
 				match, ok bool,
 			) {
 				count++
@@ -599,7 +599,7 @@ func (c *Collection) Intersects(
 		)
 	}
 	return c.geoSearch(obj.Rect(),
-		func(id string, o geojson.Object, fields []float64) bool {
+		func(id string, o geojson.Object, fields *Fields) bool {
 			count++
 			if count <= offset {
 				return true
@@ -619,7 +619,7 @@ func (c *Collection) Intersects(
 func (c *Collection) Nearby(
 	target geojson.Object,
 	cursor Cursor,
-	iter func(id string, obj geojson.Object, fields []float64) bool,
+	iter func(id string, obj geojson.Object, fields *Fields) bool,
 ) bool {
 	// First look to see if there's at least one candidate in the circle's
 	// outer rectangle. This is a fast-fail operation.
@@ -665,7 +665,7 @@ func (c *Collection) Nearby(
 				cursor.Step(1)
 			}
 			item := itemv
-			alive = iter(item.ID(), item.Obj(), item.Fields())
+			alive = iter(item.ID(), item.Obj(), itemFields(item))
 			return alive
 		},
 	)

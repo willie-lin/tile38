@@ -104,7 +104,7 @@ func TestCollectionNewCollection(t *testing.T) {
 		Min: geometry.Point{X: -180, Y: -90},
 		Max: geometry.Point{X: 180, Y: 90},
 	}
-	c.geoSearch(bbox, func(id string, obj geojson.Object, field []float64) bool {
+	c.geoSearch(bbox, func(id string, obj geojson.Object, field *Fields) bool {
 		count++
 		return true
 	})
@@ -124,8 +124,8 @@ func TestCollectionSet(t *testing.T) {
 		str1 := String("hello")
 		oldObject, oldFields, newFields := c.Set("str", str1, nil, nil)
 		expect(t, oldObject == nil)
-		expect(t, len(oldFields) == 0)
-		expect(t, len(newFields) == 0)
+		expect(t, fieldLen(oldFields) == 0)
+		expect(t, fieldLen(newFields) == 0)
 	})
 	t.Run("UpdateString", func(t *testing.T) {
 		c := New()
@@ -133,20 +133,20 @@ func TestCollectionSet(t *testing.T) {
 		str2 := String("world")
 		oldObject, oldFields, newFields := c.Set("str", str1, nil, nil)
 		expect(t, oldObject == nil)
-		expect(t, len(oldFields) == 0)
-		expect(t, len(newFields) == 0)
+		expect(t, fieldLen(oldFields) == 0)
+		expect(t, fieldLen(newFields) == 0)
 		oldObject, oldFields, newFields = c.Set("str", str2, nil, nil)
 		expect(t, oldObject == str1)
-		expect(t, len(oldFields) == 0)
-		expect(t, len(newFields) == 0)
+		expect(t, fieldLen(oldFields) == 0)
+		expect(t, fieldLen(newFields) == 0)
 	})
 	t.Run("AddPoint", func(t *testing.T) {
 		c := New()
 		point1 := PO(-112.1, 33.1)
 		oldObject, oldFields, newFields := c.Set("point", point1, nil, nil)
 		expect(t, oldObject == nil)
-		expect(t, len(oldFields) == 0)
-		expect(t, len(newFields) == 0)
+		expect(t, fieldLen(oldFields) == 0)
+		expect(t, fieldLen(newFields) == 0)
 	})
 	t.Run("UpdatePoint", func(t *testing.T) {
 		c := New()
@@ -154,12 +154,12 @@ func TestCollectionSet(t *testing.T) {
 		point2 := PO(-112.2, 33.2)
 		oldObject, oldFields, newFields := c.Set("point", point1, nil, nil)
 		expect(t, oldObject == nil)
-		expect(t, len(oldFields) == 0)
-		expect(t, len(newFields) == 0)
+		expect(t, fieldLen(oldFields) == 0)
+		expect(t, fieldLen(newFields) == 0)
 		oldObject, oldFields, newFields = c.Set("point", point2, nil, nil)
 		expect(t, oldObject == point1)
-		expect(t, len(oldFields) == 0)
-		expect(t, len(newFields) == 0)
+		expect(t, fieldLen(oldFields) == 0)
+		expect(t, fieldLen(newFields) == 0)
 	})
 	t.Run("Fields", func(t *testing.T) {
 		c := New()
@@ -170,23 +170,23 @@ func TestCollectionSet(t *testing.T) {
 			fValues := []float64{1, 2, 3}
 			oldObj, oldFlds, newFlds := c.Set("str", str1, fNames, fValues)
 			expect(t, oldObj == nil)
-			expect(t, len(oldFlds) == 0)
-			expect(t, reflect.DeepEqual(newFlds, fValues))
+			expect(t, fieldLen(oldFlds) == 0)
+			expect(t, fieldIterEquals(newFlds, fValues))
 		}
 		{
 			fNames := []string{"d", "e", "f"}
 			fValues := []float64{4, 5, 6}
 			oldObj, oldFlds, newFlds := c.Set("str", str2, fNames, fValues)
 			expect(t, oldObj == str1)
-			expect(t, reflect.DeepEqual(oldFlds, []float64{1, 2, 3}))
-			expect(t, reflect.DeepEqual(newFlds, []float64{1, 2, 3, 4, 5, 6}))
+			expect(t, fieldIterEquals(oldFlds, []float64{1, 2, 3}))
+			expect(t, fieldIterEquals(newFlds, []float64{1, 2, 3, 4, 5, 6}))
 		}
 		{
 			fValues := []float64{7, 8, 9, 10, 11, 12}
 			oldObj, oldFlds, newFlds := c.Set("str", str1, nil, fValues)
 			expect(t, oldObj == str2)
-			expect(t, reflect.DeepEqual(oldFlds, []float64{1, 2, 3, 4, 5, 6}))
-			expect(t, reflect.DeepEqual(newFlds, []float64{7, 8, 9, 10, 11, 12}))
+			expect(t, fieldIterEquals(oldFlds, []float64{1, 2, 3, 4, 5, 6}))
+			expect(t, fieldIterEquals(newFlds, []float64{7, 8, 9, 10, 11, 12}))
 		}
 	})
 	t.Run("Delete", func(t *testing.T) {
@@ -204,7 +204,7 @@ func TestCollectionSet(t *testing.T) {
 			Max: geometry.Point{X: 1, Y: 2}})
 		var v geojson.Object
 		var ok bool
-		var flds []float64
+		var flds *Fields
 		var updated bool
 		var updateCount int
 
@@ -226,24 +226,24 @@ func TestCollectionSet(t *testing.T) {
 
 		v, flds, updated, ok = c.SetField("3", "hello", 123)
 		expect(t, ok)
-		expect(t, reflect.DeepEqual(flds, []float64{123}))
+		expect(t, fieldIterEquals(flds, []float64{123}))
 		expect(t, updated)
 		expect(t, c.FieldMap()["hello"] == 0)
 
 		v, flds, updated, ok = c.SetField("3", "hello", 1234)
 		expect(t, ok)
-		expect(t, reflect.DeepEqual(flds, []float64{1234}))
+		expect(t, fieldIterEquals(flds, []float64{1234}))
 		expect(t, updated)
 
 		v, flds, updated, ok = c.SetField("3", "hello", 1234)
 		expect(t, ok)
-		expect(t, reflect.DeepEqual(flds, []float64{1234}))
+		expect(t, fieldIterEquals(flds, []float64{1234}))
 		expect(t, !updated)
 
 		v, flds, updateCount, ok = c.SetFields("3",
 			[]string{"planet", "world"}, []float64{55, 66})
 		expect(t, ok)
-		expect(t, reflect.DeepEqual(flds, []float64{1234, 55, 66}))
+		expect(t, fieldIterEquals(flds, []float64{1234, 55, 66}))
 		expect(t, updateCount == 2)
 		expect(t, c.FieldMap()["hello"] == 0)
 		expect(t, c.FieldMap()["planet"] == 1)
@@ -277,6 +277,29 @@ func TestCollectionSet(t *testing.T) {
 	})
 }
 
+func fieldLen(fields *Fields) int {
+	var idx int
+	fields.ForEach(-1, func(value float64) bool {
+		idx++
+		return true
+	})
+	return idx
+}
+
+func fieldIterEquals(fields *Fields, values []float64) bool {
+	ok := true
+	var idx int
+	fields.ForEach(len(values), func(value float64) bool {
+		if value != values[idx] {
+			ok = false
+			return false
+		}
+		idx++
+		return true
+	})
+	return ok
+}
+
 func TestCollectionScan(t *testing.T) {
 	N := 256
 	c := New()
@@ -286,22 +309,22 @@ func TestCollectionScan(t *testing.T) {
 	}
 	var n int
 	var prevID string
-	c.Scan(false, nil, func(id string, obj geojson.Object, fields []float64) bool {
+	c.Scan(false, nil, func(id string, obj geojson.Object, fields *Fields) bool {
 		if n > 0 {
 			expect(t, id > prevID)
 		}
-		expect(t, id == fmt.Sprintf("%04d", int(fields[0])))
+		expect(t, id == fmt.Sprintf("%04d", int(fields.Get(0))))
 		n++
 		prevID = id
 		return true
 	})
 	expect(t, n == c.Count())
 	n = 0
-	c.Scan(true, nil, func(id string, obj geojson.Object, fields []float64) bool {
+	c.Scan(true, nil, func(id string, obj geojson.Object, fields *Fields) bool {
 		if n > 0 {
 			expect(t, id < prevID)
 		}
-		expect(t, id == fmt.Sprintf("%04d", int(fields[0])))
+		expect(t, id == fmt.Sprintf("%04d", int(fields.Get(0))))
 		n++
 		prevID = id
 		return true
@@ -310,11 +333,11 @@ func TestCollectionScan(t *testing.T) {
 
 	n = 0
 	c.ScanRange("0060", "0070", false, nil,
-		func(id string, obj geojson.Object, fields []float64) bool {
+		func(id string, obj geojson.Object, fields *Fields) bool {
 			if n > 0 {
 				expect(t, id > prevID)
 			}
-			expect(t, id == fmt.Sprintf("%04d", int(fields[0])))
+			expect(t, id == fmt.Sprintf("%04d", int(fields.Get(0))))
 			n++
 			prevID = id
 			return true
@@ -323,11 +346,11 @@ func TestCollectionScan(t *testing.T) {
 
 	n = 0
 	c.ScanRange("0070", "0060", true, nil,
-		func(id string, obj geojson.Object, fields []float64) bool {
+		func(id string, obj geojson.Object, fields *Fields) bool {
 			if n > 0 {
 				expect(t, id < prevID)
 			}
-			expect(t, id == fmt.Sprintf("%04d", int(fields[0])))
+			expect(t, id == fmt.Sprintf("%04d", int(fields.Get(0))))
 			n++
 			prevID = id
 			return true
@@ -336,11 +359,11 @@ func TestCollectionScan(t *testing.T) {
 
 	n = 0
 	c.ScanGreaterOrEqual("0070", true, nil,
-		func(id string, obj geojson.Object, fields []float64) bool {
+		func(id string, obj geojson.Object, fields *Fields) bool {
 			if n > 0 {
 				expect(t, id < prevID)
 			}
-			expect(t, id == fmt.Sprintf("%04d", int(fields[0])))
+			expect(t, id == fmt.Sprintf("%04d", int(fields.Get(0))))
 			n++
 			prevID = id
 			return true
@@ -349,11 +372,11 @@ func TestCollectionScan(t *testing.T) {
 
 	n = 0
 	c.ScanGreaterOrEqual("0070", false, nil,
-		func(id string, obj geojson.Object, fields []float64) bool {
+		func(id string, obj geojson.Object, fields *Fields) bool {
 			if n > 0 {
 				expect(t, id > prevID)
 			}
-			expect(t, id == fmt.Sprintf("%04d", int(fields[0])))
+			expect(t, id == fmt.Sprintf("%04d", int(fields.Get(0))))
 			n++
 			prevID = id
 			return true
@@ -373,22 +396,22 @@ func TestCollectionSearch(t *testing.T) {
 	}
 	var n int
 	var prevValue string
-	c.SearchValues(false, nil, func(id string, obj geojson.Object, fields []float64) bool {
+	c.SearchValues(false, nil, func(id string, obj geojson.Object, fields *Fields) bool {
 		if n > 0 {
 			expect(t, obj.String() > prevValue)
 		}
-		expect(t, id == fmt.Sprintf("%04d", int(fields[1])))
+		expect(t, id == fmt.Sprintf("%04d", int(fields.Get(1))))
 		n++
 		prevValue = obj.String()
 		return true
 	})
 	expect(t, n == c.Count())
 	n = 0
-	c.SearchValues(true, nil, func(id string, obj geojson.Object, fields []float64) bool {
+	c.SearchValues(true, nil, func(id string, obj geojson.Object, fields *Fields) bool {
 		if n > 0 {
 			expect(t, obj.String() < prevValue)
 		}
-		expect(t, id == fmt.Sprintf("%04d", int(fields[1])))
+		expect(t, id == fmt.Sprintf("%04d", int(fields.Get(1))))
 		n++
 		prevValue = obj.String()
 		return true
@@ -397,11 +420,11 @@ func TestCollectionSearch(t *testing.T) {
 
 	n = 0
 	c.SearchValuesRange("0060", "0070", false, nil,
-		func(id string, obj geojson.Object, fields []float64) bool {
+		func(id string, obj geojson.Object, fields *Fields) bool {
 			if n > 0 {
 				expect(t, obj.String() > prevValue)
 			}
-			expect(t, id == fmt.Sprintf("%04d", int(fields[1])))
+			expect(t, id == fmt.Sprintf("%04d", int(fields.Get(1))))
 			n++
 			prevValue = obj.String()
 			return true
@@ -410,11 +433,11 @@ func TestCollectionSearch(t *testing.T) {
 
 	n = 0
 	c.SearchValuesRange("0070", "0060", true, nil,
-		func(id string, obj geojson.Object, fields []float64) bool {
+		func(id string, obj geojson.Object, fields *Fields) bool {
 			if n > 0 {
 				expect(t, obj.String() < prevValue)
 			}
-			expect(t, id == fmt.Sprintf("%04d", int(fields[1])))
+			expect(t, id == fmt.Sprintf("%04d", int(fields.Get(1))))
 			n++
 			prevValue = obj.String()
 			return true
@@ -493,7 +516,7 @@ func TestSpatialSearch(t *testing.T) {
 
 	n = 0
 	c.Within(q1, 0, nil,
-		func(id string, obj geojson.Object, fields []float64) bool {
+		func(id string, obj geojson.Object, fields *Fields) bool {
 			n++
 			return true
 		},
@@ -502,7 +525,7 @@ func TestSpatialSearch(t *testing.T) {
 
 	n = 0
 	c.Within(q2, 0, nil,
-		func(id string, obj geojson.Object, fields []float64) bool {
+		func(id string, obj geojson.Object, fields *Fields) bool {
 			n++
 			return true
 		},
@@ -511,7 +534,7 @@ func TestSpatialSearch(t *testing.T) {
 
 	n = 0
 	c.Within(q3, 0, nil,
-		func(id string, obj geojson.Object, fields []float64) bool {
+		func(id string, obj geojson.Object, fields *Fields) bool {
 			n++
 			return true
 		},
@@ -520,7 +543,7 @@ func TestSpatialSearch(t *testing.T) {
 
 	n = 0
 	c.Intersects(q1, 0, nil,
-		func(_ string, _ geojson.Object, _ []float64) bool {
+		func(_ string, _ geojson.Object, _ *Fields) bool {
 			n++
 			return true
 		},
@@ -529,7 +552,7 @@ func TestSpatialSearch(t *testing.T) {
 
 	n = 0
 	c.Intersects(q2, 0, nil,
-		func(_ string, _ geojson.Object, _ []float64) bool {
+		func(_ string, _ geojson.Object, _ *Fields) bool {
 			n++
 			return true
 		},
@@ -538,7 +561,7 @@ func TestSpatialSearch(t *testing.T) {
 
 	n = 0
 	c.Intersects(q3, 0, nil,
-		func(_ string, _ geojson.Object, _ []float64) bool {
+		func(_ string, _ geojson.Object, _ *Fields) bool {
 			n++
 			return true
 		},
@@ -547,7 +570,7 @@ func TestSpatialSearch(t *testing.T) {
 
 	n = 0
 	c.Intersects(q3, 0, nil,
-		func(_ string, _ geojson.Object, _ []float64) bool {
+		func(_ string, _ geojson.Object, _ *Fields) bool {
 			n++
 			return n <= 1
 		},
@@ -559,7 +582,7 @@ func TestSpatialSearch(t *testing.T) {
 		r2, p1, p4, r1, p3, r3, p2,
 	}
 	c.Nearby(q4, nil,
-		func(id string, obj geojson.Object, fields []float64) bool {
+		func(id string, obj geojson.Object, fields *Fields) bool {
 			items = append(items, obj)
 			return true
 		},
@@ -585,7 +608,7 @@ func TestCollectionSparse(t *testing.T) {
 	var n int
 	n = 0
 	c.Within(rect, 1, nil,
-		func(id string, obj geojson.Object, fields []float64) bool {
+		func(id string, obj geojson.Object, fields *Fields) bool {
 			n++
 			return true
 		},
@@ -594,7 +617,7 @@ func TestCollectionSparse(t *testing.T) {
 
 	n = 0
 	c.Within(rect, 2, nil,
-		func(id string, obj geojson.Object, fields []float64) bool {
+		func(id string, obj geojson.Object, fields *Fields) bool {
 			n++
 			return true
 		},
@@ -603,7 +626,7 @@ func TestCollectionSparse(t *testing.T) {
 
 	n = 0
 	c.Within(rect, 3, nil,
-		func(id string, obj geojson.Object, fields []float64) bool {
+		func(id string, obj geojson.Object, fields *Fields) bool {
 			n++
 			return true
 		},
@@ -612,7 +635,7 @@ func TestCollectionSparse(t *testing.T) {
 
 	n = 0
 	c.Within(rect, 3, nil,
-		func(id string, obj geojson.Object, fields []float64) bool {
+		func(id string, obj geojson.Object, fields *Fields) bool {
 			n++
 			return n <= 30
 		},
@@ -621,7 +644,7 @@ func TestCollectionSparse(t *testing.T) {
 
 	n = 0
 	c.Intersects(rect, 3, nil,
-		func(id string, _ geojson.Object, _ []float64) bool {
+		func(id string, _ geojson.Object, _ *Fields) bool {
 			n++
 			return true
 		},
@@ -630,7 +653,7 @@ func TestCollectionSparse(t *testing.T) {
 
 	n = 0
 	c.Intersects(rect, 3, nil,
-		func(id string, _ geojson.Object, _ []float64) bool {
+		func(id string, _ geojson.Object, _ *Fields) bool {
 			n++
 			return n <= 30
 		},
@@ -683,7 +706,7 @@ func TestManyCollections(t *testing.T) {
 		Min: geometry.Point{X: -180, Y: 30},
 		Max: geometry.Point{X: 34, Y: 100},
 	}
-	col.geoSearch(bbox, func(id string, obj geojson.Object, fields []float64) bool {
+	col.geoSearch(bbox, func(id string, obj geojson.Object, fields *Fields) bool {
 		//println(id)
 		return true
 	})

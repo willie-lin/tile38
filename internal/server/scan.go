@@ -7,6 +7,7 @@ import (
 
 	"github.com/tidwall/geojson"
 	"github.com/tidwall/resp"
+	"github.com/tidwall/tile38/internal/collection"
 	"github.com/tidwall/tile38/internal/glob"
 )
 
@@ -67,7 +68,7 @@ func (c *Server) cmdScan(msg *Message) (res resp.Value, err error) {
 			g := glob.Parse(sw.globPattern, s.desc)
 			if g.Limits[0] == "" && g.Limits[1] == "" {
 				sw.col.Scan(s.desc, sw,
-					func(id string, o geojson.Object, fields []float64) bool {
+					func(id string, o geojson.Object, fields *collection.Fields) bool {
 						return sw.writeObject(ScanWriterParams{
 							id:     id,
 							o:      o,
@@ -77,7 +78,7 @@ func (c *Server) cmdScan(msg *Message) (res resp.Value, err error) {
 				)
 			} else {
 				sw.col.ScanRange(g.Limits[0], g.Limits[1], s.desc, sw,
-					func(id string, o geojson.Object, fields []float64) bool {
+					func(id string, o geojson.Object, fields *collection.Fields) bool {
 						return sw.writeObject(ScanWriterParams{
 							id:     id,
 							o:      o,
