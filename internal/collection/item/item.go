@@ -9,50 +9,81 @@ import (
 )
 
 // PackedFields indicates that fields are bit packed
-const PackedFields = true
+var PackedFields = false
 
 // Item is a item for Tile38 collections
 type Item struct {
-	point     bool           // true: Item is pointItem, false: Item is objItem
-	fieldsLen uint16         // fields block size in bytes, not num of fields
-	idLen     uint32         // id block size in bytes
-	data      unsafe.Pointer // pointer to raw block of bytes, fields+id
+	head [2]uint32      // (1:isPoint,31:fieldsByteLen),(32:idLen)
+	data unsafe.Pointer // pointer to raw block of bytes, fields+id
 }
 type objItem struct {
-	_   bool
-	_   uint16
-	_   uint32
+	_   [2]uint32
 	_   unsafe.Pointer
 	obj geojson.Object
 }
 type pointItem struct {
-	_  bool
-	_  uint16
-	_  uint32
+	_  [2]uint32
 	_  unsafe.Pointer
 	pt geojson.SimplePoint
+}
+
+func (item *Item) isPoint() bool {
+	return item.head[0]>>31 == 1
+}
+
+func (item *Item) setIsPoint(isPoint bool) {
+	if isPoint {
+		item.head[0] |= 1 << 31
+	} else {
+		item.head[0] = item.head[0] << 1 >> 1
+	}
+}
+
+func (item *Item) fieldsLen() int {
+	return int(item.head[0] << 1 >> 1)
+}
+
+func (item *Item) setFieldsLen(len int) {
+	item.head[0] = item.head[0]>>31<<31 | uint32(len)
+}
+
+func (item *Item) idLen() int {
+	return int(item.head[1])
+}
+
+func (item *Item) setIDLen(len int) {
+	item.head[1] = uint32(len)
 }
 
 // ID returns the items ID as a string
 func (item *Item) ID() string {
 	return *(*string)((unsafe.Pointer)(&reflect.StringHeader{
-		Data: uintptr(unsafe.Pointer(item.data)) + uintptr(item.fieldsLen),
-		Len:  int(item.idLen),
+		Data: uintptr(unsafe.Pointer(item.data)) + uintptr(item.fieldsLen()),
+		Len:  item.idLen(),
 	}))
 }
+
+// // Fields returns the field values
+// func (item *Item) fields() []float64 {
+// 	return *(*[]float64)((unsafe.Pointer)(&reflect.SliceHeader{
+// 		Data: uintptr(unsafe.Pointer(item.data)),
+// 		Len:  item.fieldsLen() / 8,
+// 		Cap:  item.fieldsLen() / 8,
+// 	}))
+// }
 
 // Fields returns the field values
 func (item *Item) fields() []float64 {
 	return *(*[]float64)((unsafe.Pointer)(&reflect.SliceHeader{
 		Data: uintptr(unsafe.Pointer(item.data)),
-		Len:  int(item.fieldsLen) / 8,
-		Cap:  int(item.fieldsLen) / 8,
+		Len:  item.fieldsLen() / 8,
+		Cap:  item.fieldsLen() / 8,
 	}))
 }
 
 // Obj returns the geojson object
 func (item *Item) Obj() geojson.Object {
-	if item.point {
+	if item.isPoint() {
 		return &(*pointItem)(unsafe.Pointer(item)).pt
 	}
 	return (*objItem)(unsafe.Pointer(item)).obj
@@ -65,13 +96,13 @@ func New(id string, obj geojson.Object) *Item {
 		pitem := new(pointItem)
 		pitem.pt = *pt
 		item = (*Item)(unsafe.Pointer(pitem))
-		item.point = true
+		item.setIsPoint(true)
 	} else {
 		oitem := new(objItem)
 		oitem.obj = obj
 		item = (*Item)(unsafe.Pointer(oitem))
 	}
-	item.idLen = uint32(len(id))
+	item.setIDLen(len(id))
 	item.data = unsafe.Pointer((*reflect.SliceHeader)(unsafe.Pointer(&id)).Data)
 	return item
 }
@@ -85,7 +116,7 @@ func (item *Item) WeightAndPoints() (weight, points int) {
 	} else if item.Obj() != nil {
 		weight = len(item.Obj().String())
 	}
-	weight += int(item.fieldsLen) + int(item.idLen)
+	weight += item.fieldsLen() + item.idLen()
 	return weight, points
 }
 
@@ -114,10 +145,10 @@ func (item *Item) CopyOverFields(from interface{}) {
 	}
 	fieldBytes := floatsToBytes(values)
 	oldData := item.dataBytes()
-	newData := make([]byte, len(fieldBytes)+int(item.idLen))
+	newData := make([]byte, len(fieldBytes)+item.idLen())
 	copy(newData, fieldBytes)
-	copy(newData[len(fieldBytes):], oldData[item.fieldsLen:])
-	item.fieldsLen = uint16(len(fieldBytes))
+	copy(newData[len(fieldBytes):], oldData[item.fieldsLen():])
+	item.setFieldsLen(len(fieldBytes))
 	if len(newData) > 0 {
 		item.data = unsafe.Pointer(&newData[0])
 	} else {
@@ -135,7 +166,7 @@ func setFieldAt(data unsafe.Pointer, index int, value float64) {
 
 // SetField set a field value at specified index.
 func (item *Item) SetField(index int, value float64) (updated bool) {
-	numFields := int(item.fieldsLen / 8)
+	numFields := item.fieldsLen() / 8
 	if index < numFields {
 		// field exists
 		if getFieldAt(item.data, index) == value {
@@ -144,13 +175,13 @@ func (item *Item) SetField(index int, value float64) (updated bool) {
 	} else {
 		// make room for new field
 		oldBytes := item.dataBytes()
-		newData := make([]byte, (index+1)*8+int(item.idLen))
+		newData := make([]byte, (index+1)*8+item.idLen())
 		// copy the existing fields
-		copy(newData, oldBytes[:item.fieldsLen])
+		copy(newData, oldBytes[:item.fieldsLen()])
 		// copy the id
-		copy(newData[(index+1)*8:], oldBytes[item.fieldsLen:])
+		copy(newData[(index+1)*8:], oldBytes[item.fieldsLen():])
 		// update the fields length
-		item.fieldsLen = uint16((index + 1) * 8)
+		item.setFieldsLen((index + 1) * 8)
 		// update the raw data
 		item.data = unsafe.Pointer(&newData[0])
 	}
@@ -162,8 +193,8 @@ func (item *Item) SetField(index int, value float64) (updated bool) {
 func (item *Item) dataBytes() []byte {
 	return *(*[]byte)((unsafe.Pointer)(&reflect.SliceHeader{
 		Data: uintptr(unsafe.Pointer(item.data)),
-		Len:  int(item.fieldsLen) + int(item.idLen),
-		Cap:  int(item.fieldsLen) + int(item.idLen),
+		Len:  item.fieldsLen() + item.idLen(),
+		Cap:  item.fieldsLen() + item.idLen(),
 	}))
 }
 
@@ -204,7 +235,23 @@ func (item *Item) GetField(index int) float64 {
 	if item == nil {
 		return 0
 	}
-	numFields := int(item.fieldsLen / 8)
+	if PackedFields {
+		if index < 0 {
+			panic("index out of range")
+		}
+		var fvalue float64
+		var idx int
+		item.ForEachField(-1, func(value float64) bool {
+			if idx == index {
+				fvalue = value
+				return false
+			}
+			idx++
+			return true
+		})
+		return fvalue
+	}
+	numFields := item.fieldsLen() / 8
 	if index < numFields {
 		return getFieldAt(item.data, index)
 	}
@@ -213,5 +260,5 @@ func (item *Item) GetField(index int) float64 {
 
 // HasFields returns true when item has fields
 func (item *Item) HasFields() bool {
-	return item != nil && item.fieldsLen > 0
+	return item != nil && item.fieldsLen() > 0
 }

@@ -11,6 +11,54 @@ import (
 	"github.com/tidwall/geojson/geometry"
 )
 
+func init() {
+	seed := time.Now().UnixNano()
+	println(seed)
+	rand.Seed(seed)
+}
+
+func testRandItemHead(t *testing.T, idx int, item *Item) {
+	t.Helper()
+	if idx == 0 {
+		if item.isPoint() {
+			t.Fatalf("expected false")
+		}
+		if item.fieldsLen() != 0 {
+			t.Fatalf("expected '%v', got '%v'", 0, item.fieldsLen())
+		}
+		if item.idLen() != 0 {
+			t.Fatalf("expected '%v', got '%v'", 0, item.idLen())
+		}
+	}
+	isPoint := rand.Int()%2 == 0
+	fieldsLen := int(rand.Uint32() << 1 >> 1)
+	idLen := int(rand.Uint32())
+
+	item.setIsPoint(isPoint)
+	item.setFieldsLen(fieldsLen)
+	item.setIDLen(idLen)
+
+	if item.isPoint() != isPoint {
+		t.Fatalf("isPoint: expected '%v', got '%v'", isPoint, item.isPoint())
+	}
+	if item.fieldsLen() != fieldsLen {
+		t.Fatalf("fieldsLen: expected '%v', got '%v'", fieldsLen, item.fieldsLen())
+	}
+	if item.idLen() != idLen {
+		t.Fatalf("idLen: expected '%v', got '%v'", idLen, item.idLen())
+	}
+}
+
+func TestItemHead(t *testing.T) {
+	start := time.Now()
+	for time.Since(start) < time.Second/2 {
+		var item Item
+		for i := 0; i < 10; i++ {
+			testRandItemHead(t, i, &item)
+		}
+	}
+}
+
 func testRandItem(t *testing.T) {
 	keyb := make([]byte, rand.Int()%16)
 	rand.Read(keyb)
@@ -159,9 +207,8 @@ func testRandItem(t *testing.T) {
 }
 
 func TestItem(t *testing.T) {
-	rand.Seed(time.Now().UnixNano())
 	start := time.Now()
-	for time.Since(start) < time.Second {
+	for time.Since(start) < time.Second/2 {
 		testRandItem(t)
 	}
 }
