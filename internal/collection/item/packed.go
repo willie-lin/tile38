@@ -1,7 +1,6 @@
 package item
 
 import (
-	"fmt"
 	"unsafe"
 
 	"github.com/h2so5/half"
@@ -75,7 +74,8 @@ func appendPacked(dst []byte, f64 float64) []byte {
 
 func skipPacked(data []byte, count int) (out []byte, read int) {
 	var i int
-	for i < len(data) {
+loop: // force inline
+	if i < len(data) {
 		if read >= count {
 			return data[i:], read
 		}
@@ -90,6 +90,8 @@ func skipPacked(data []byte, count int) (out []byte, read int) {
 			i += 9
 		}
 		read++
+		goto loop
+
 	}
 	return nil, read
 }
@@ -153,18 +155,6 @@ func (item *Item) packedGenerateFieldBytes(values []float64) []byte {
 }
 
 func (item *Item) packedSetField(index int, value float64) (updated bool) {
-	if false {
-		func() {
-			data := item.fieldsBytes()
-			fmt.Printf("%v >> [%x]", value, data)
-			defer func() {
-				data := item.fieldsBytes()
-				fmt.Printf(" >> [%x]\n", data)
-			}()
-		}()
-	}
-	/////////////////////////////////////////////////////////////////
-
 	// original field bytes
 	headBytes := item.fieldsBytes()
 
@@ -269,16 +259,11 @@ func (item *Item) packedForEachField(count int, iter func(value float64) bool) {
 }
 
 func (item *Item) packedGetField(index int) float64 {
-
-	var idx int
-	var fvalue float64
-	item.packedForEachField(-1, func(value float64) bool {
-		if idx == index {
-			fvalue = value
-			return false
-		}
-		idx++
-		return true
-	})
-	return fvalue
+	data := item.fieldsBytes()
+	data, _ = skipPacked(data, index)
+	if len(data) == 0 {
+		return 0
+	}
+	_, value := readPacked(data)
+	return value
 }
