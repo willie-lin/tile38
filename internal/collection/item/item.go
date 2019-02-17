@@ -57,36 +57,28 @@ func (item *Item) setIsPacked(isPacked bool) {
 	}
 }
 
-func (item *Item) fieldsLen() int {
+func (item *Item) fieldsDataSize() int {
 	return int(item.head[0] & 0x3FFFFFFF)
 }
 
-func (item *Item) setFieldsLen(len int) {
+func (item *Item) setFieldsDataSize(len int) {
 	item.head[0] = item.head[0]>>30<<30 | uint32(len)
 }
 
-func (item *Item) idLen() int {
+func (item *Item) idDataSize() int {
 	return int(item.head[1])
 }
 
-func (item *Item) setIDLen(len int) {
+func (item *Item) setIDDataSize(len int) {
 	item.head[1] = uint32(len)
 }
 
 // ID returns the items ID as a string
 func (item *Item) ID() string {
 	return *(*string)((unsafe.Pointer)(&reflect.StringHeader{
-		Data: uintptr(unsafe.Pointer(item.data)) + uintptr(item.fieldsLen()),
-		Len:  item.idLen(),
-	}))
-}
-
-// Fields returns the field values
-func (item *Item) fields() []float64 {
-	return *(*[]float64)((unsafe.Pointer)(&reflect.SliceHeader{
-		Data: uintptr(unsafe.Pointer(item.data)),
-		Len:  item.fieldsLen() / 8,
-		Cap:  item.fieldsLen() / 8,
+		Data: uintptr(unsafe.Pointer(item.data)) +
+			uintptr(item.fieldsDataSize()),
+		Len: item.idDataSize(),
 	}))
 }
 
@@ -112,7 +104,7 @@ func New(id string, obj geojson.Object, packed bool) *Item {
 		item = (*Item)(unsafe.Pointer(oitem))
 	}
 	item.setIsPacked(packed)
-	item.setIDLen(len(id))
+	item.setIDDataSize(len(id))
 	item.data = unsafe.Pointer((*reflect.SliceHeader)(unsafe.Pointer(&id)).Data)
 	return item
 }
@@ -126,7 +118,7 @@ func (item *Item) WeightAndPoints() (weight, points int) {
 	} else if item.Obj() != nil {
 		weight = len(item.Obj().String())
 	}
-	weight += item.fieldsLen() + item.idLen()
+	weight += item.fieldsDataSize() + item.idDataSize()
 	return weight, points
 }
 
@@ -144,21 +136,56 @@ func (item *Item) Less(other btree.Item, ctx interface{}) bool {
 	return item.ID() < other.(*Item).ID()
 }
 
+// fieldBytes returns the raw fields data section
+func (item *Item) fieldsBytes() []byte {
+	return *(*[]byte)((unsafe.Pointer)(&reflect.SliceHeader{
+		Data: uintptr(unsafe.Pointer(item.data)),
+		Len:  item.fieldsDataSize(),
+		Cap:  item.fieldsDataSize(),
+	}))
+}
+
+// Packed returns true when the item's fields are packed
+func (item *Item) Packed() bool {
+	return item == nil || item.isPacked()
+}
+
 // CopyOverFields overwriting previous fields. Accepts an *Item or []float64
 func (item *Item) CopyOverFields(from interface{}) {
+	if item == nil {
+		return
+	}
 	var values []float64
+	var fieldBytes []byte
+	var directCopy bool
 	switch from := from.(type) {
 	case *Item:
-		values = from.fields()
+		if item.Packed() == from.Packed() {
+			// direct copy the bytes
+			fieldBytes = from.fieldsBytes()
+			directCopy = true
+		} else {
+			// get the values through iteration
+			item.ForEachField(-1, func(value float64) bool {
+				values = append(values, value)
+				return true
+			})
+		}
 	case []float64:
 		values = from
 	}
-	fieldBytes := floatsToBytes(values)
-	oldData := item.dataBytes()
-	newData := make([]byte, len(fieldBytes)+item.idLen())
+	if !directCopy {
+		if item.Packed() {
+			fieldBytes = item.packedGenerateFieldBytes(values)
+		} else {
+			fieldBytes = item.unpackedGenerateFieldBytes(values)
+		}
+	}
+	id := item.ID()
+	newData := make([]byte, len(fieldBytes)+len(id))
 	copy(newData, fieldBytes)
-	copy(newData[len(fieldBytes):], oldData[item.fieldsLen():])
-	item.setFieldsLen(len(fieldBytes))
+	copy(newData[len(fieldBytes):], id)
+	item.setFieldsDataSize(len(fieldBytes))
 	if len(newData) > 0 {
 		item.data = unsafe.Pointer(&newData[0])
 	} else {
@@ -166,54 +193,15 @@ func (item *Item) CopyOverFields(from interface{}) {
 	}
 }
 
-func getFieldAt(data unsafe.Pointer, index int) float64 {
-	return *(*float64)(unsafe.Pointer(uintptr(data) + uintptr(index*8)))
-}
-
-func setFieldAt(data unsafe.Pointer, index int, value float64) {
-	*(*float64)(unsafe.Pointer(uintptr(data) + uintptr(index*8))) = value
-}
-
 // SetField set a field value at specified index.
 func (item *Item) SetField(index int, value float64) (updated bool) {
-	numFields := item.fieldsLen() / 8
-	if index < numFields {
-		// field exists
-		if getFieldAt(item.data, index) == value {
-			return false
-		}
-	} else {
-		// make room for new field
-		oldBytes := item.dataBytes()
-		newData := make([]byte, (index+1)*8+item.idLen())
-		// copy the existing fields
-		copy(newData, oldBytes[:item.fieldsLen()])
-		// copy the id
-		copy(newData[(index+1)*8:], oldBytes[item.fieldsLen():])
-		// update the fields length
-		item.setFieldsLen((index + 1) * 8)
-		// update the raw data
-		item.data = unsafe.Pointer(&newData[0])
+	if item == nil {
+		return false
 	}
-	// set the new field
-	setFieldAt(item.data, index, value)
-	return true
-}
-
-func (item *Item) dataBytes() []byte {
-	return *(*[]byte)((unsafe.Pointer)(&reflect.SliceHeader{
-		Data: uintptr(unsafe.Pointer(item.data)),
-		Len:  item.fieldsLen() + item.idLen(),
-		Cap:  item.fieldsLen() + item.idLen(),
-	}))
-}
-
-func floatsToBytes(f []float64) []byte {
-	return *(*[]byte)((unsafe.Pointer)(&reflect.SliceHeader{
-		Data: ((*reflect.SliceHeader)(unsafe.Pointer(&f))).Data,
-		Len:  len(f) * 8,
-		Cap:  len(f) * 8,
-	}))
+	if item.Packed() {
+		return item.packedSetField(index, value)
+	}
+	return item.unpackedSetField(index, value)
 }
 
 // ForEachField iterates over each field. The count param is the number of
@@ -222,27 +210,11 @@ func (item *Item) ForEachField(count int, iter func(value float64) bool) {
 	if item == nil {
 		return
 	}
-	fields := item.fields()
-	var n int
-	if count < 0 {
-		n = len(fields)
+	if item.Packed() {
+		item.packedForEachField(count, iter)
 	} else {
-		n = count
+		item.unpackedForEachField(count, iter)
 	}
-	for i := 0; i < n; i++ {
-		var field float64
-		if i < len(fields) {
-			field = fields[i]
-		}
-		if !iter(field) {
-			return
-		}
-	}
-}
-
-// Packed returns true when the item's fields are packed
-func (item *Item) Packed() bool {
-	return item == nil || item.isPacked()
 }
 
 // GetField returns the value for a field at index.
@@ -254,26 +226,12 @@ func (item *Item) GetField(index int) float64 {
 		return 0
 	}
 	if item.Packed() {
-		var fvalue float64
-		var idx int
-		item.ForEachField(-1, func(value float64) bool {
-			if idx == index {
-				fvalue = value
-				return false
-			}
-			idx++
-			return true
-		})
-		return fvalue
+		return item.packedGetField(index)
 	}
-	numFields := item.fieldsLen() / 8
-	if index < numFields {
-		return getFieldAt(item.data, index)
-	}
-	return 0
+	return item.unpackedGetField(index)
 }
 
 // HasFields returns true when item has fields
 func (item *Item) HasFields() bool {
-	return item != nil && item.fieldsLen() > 0
+	return item != nil && item.fieldsDataSize() > 0
 }

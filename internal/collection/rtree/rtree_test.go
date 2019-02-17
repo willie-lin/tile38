@@ -46,7 +46,7 @@ func randPoints(N int) []*item.Item {
 			box.min[j] = rand.Float64()
 		}
 		box.max = box.min
-		boxes[i] = item.New(fmt.Sprintf("%d", i), box)
+		boxes[i] = item.New(fmt.Sprintf("%d", i), box, false)
 	}
 	return boxes
 }
@@ -68,7 +68,7 @@ func randBoxes(N int) []*item.Item {
 		if box.max[0] > 180 || box.max[1] > 90 {
 			i--
 		}
-		boxes[i] = item.New(fmt.Sprintf("%d", i), box)
+		boxes[i] = item.New(fmt.Sprintf("%d", i), box, false)
 	}
 	return boxes
 }
@@ -264,7 +264,7 @@ func testBoxesVarious(t *testing.T, items []*item.Item, label string) {
 				nbox.max[j] = box.max[j] + (rand.Float64() - 0.5)
 			}
 		}
-		nboxes[i] = item.New(fmt.Sprintf("%d", i), nbox)
+		nboxes[i] = item.New(fmt.Sprintf("%d", i), nbox, false)
 	}
 	for i := 0; i < N; i++ {
 		tr.Insert(boxMin(nboxes[i]), boxMax(nboxes[i]), nboxes[i])

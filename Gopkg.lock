@@ -124,6 +124,14 @@
   revision = "e8fc0692a7e26a05b06517348ed466349062eb47"
 
 [[projects]]
+  branch = "master"
+  digest = "1:de10194e2fb3787b2efdea394a7f710f49bfdcaae78f715b38a9057c602a4998"
+  name = "github.com/h2so5/half"
+  packages = ["."]
+  pruneopts = ""
+  revision = "c705bde19bd0aa32d718d167c961fe681ee91473"
+
+[[projects]]
   digest = "1:6f49eae0c1e5dab1dafafee34b207aeb7a42303105960944828c2079b92fc88e"
   name = "github.com/jmespath/go-jmespath"
   packages = ["."]
@@ -224,11 +232,11 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:2fef6390e8d9118debd4937a699afad9e1629f2d5d3c965a58fc33afe04f9b46"
+  digest = "1:4d2ec831fbaaf74fd75d2d9fe107e605c92489ec6cef6d36e1f23b678e9f2bd4"
   name = "github.com/tidwall/buntdb"
   packages = ["."]
   pruneopts = ""
-  revision = "b67b1b8c1658cb01502801c14e33c61e6c4cbb95"
+  revision = "6249481c29c2cd96f53b691b74ac1893f72774c2"
 
 [[projects]]
   digest = "1:91acf4d86b348c1f1832336836035373b047ffcb16a0fde066bd531bbe3452b2"
@@ -254,12 +262,12 @@
   version = "v1.1.1"
 
 [[projects]]
-  digest = "1:3ddca2bd5496c6922a2a9e636530e178a43c2a534ea6634211acdc7d10222794"
+  digest = "1:eade4ea6782f5eed4a6b3138a648f9a332900650804fd206e5daaf99cc5613ea"
   name = "github.com/tidwall/gjson"
   packages = ["."]
   pruneopts = ""
-  revision = "1e3f6aeaa5bad08d777ea7807b279a07885dd8b2"
-  version = "v1.1.3"
+  revision = "eee0b6226f0d1db2675a176fdfaa8419bcad4ca8"
+  version = "v1.2.1"
 
 [[projects]]
   branch = "master"
@@ -466,6 +474,7 @@
     "github.com/eclipse/paho.mqtt.golang",
     "github.com/golang/protobuf/proto",
     "github.com/gomodule/redigo/redis",
+    "github.com/h2so5/half",
     "github.com/mmcloughlin/geohash",
     "github.com/nats-io/go-nats",
     "github.com/peterh/liner",

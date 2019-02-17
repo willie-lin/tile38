@@ -10,23 +10,17 @@ import (
 	"github.com/tidwall/geojson/geometry"
 )
 
-func init() {
-	seed := time.Now().UnixNano()
-	println(seed)
-	rand.Seed(seed)
-}
-
 func testRandItemHead(t *testing.T, idx int, item *Item) {
 	t.Helper()
 	if idx == 0 {
 		if item.isPoint() {
 			t.Fatalf("expected false")
 		}
-		if item.fieldsLen() != 0 {
-			t.Fatalf("expected '%v', got '%v'", 0, item.fieldsLen())
+		if item.fieldsDataSize() != 0 {
+			t.Fatalf("expected '%v', got '%v'", 0, item.fieldsDataSize())
 		}
-		if item.idLen() != 0 {
-			t.Fatalf("expected '%v', got '%v'", 0, item.idLen())
+		if item.idDataSize() != 0 {
+			t.Fatalf("expected '%v', got '%v'", 0, item.idDataSize())
 		}
 	}
 	isPoint := rand.Int()%2 == 0
@@ -34,17 +28,17 @@ func testRandItemHead(t *testing.T, idx int, item *Item) {
 	idLen := int(rand.Uint32())
 
 	item.setIsPoint(isPoint)
-	item.setFieldsLen(fieldsLen)
-	item.setIDLen(idLen)
+	item.setFieldsDataSize(fieldsLen)
+	item.setIDDataSize(idLen)
 
 	if item.isPoint() != isPoint {
 		t.Fatalf("isPoint: expected '%v', got '%v'", isPoint, item.isPoint())
 	}
-	if item.fieldsLen() != fieldsLen {
-		t.Fatalf("fieldsLen: expected '%v', got '%v'", fieldsLen, item.fieldsLen())
+	if item.fieldsDataSize() != fieldsLen {
+		t.Fatalf("fieldsLen: expected '%v', got '%v'", fieldsLen, item.fieldsDataSize())
 	}
-	if item.idLen() != idLen {
-		t.Fatalf("idLen: expected '%v', got '%v'", idLen, item.idLen())
+	if item.idDataSize() != idLen {
+		t.Fatalf("idLen: expected '%v', got '%v'", idLen, item.idDataSize())
 	}
 }
 
@@ -62,7 +56,6 @@ func testRandItem(t *testing.T) {
 	keyb := make([]byte, rand.Int()%16)
 	rand.Read(keyb)
 	key := string(keyb)
-
 	packed := rand.Int()%2 == 0
 	values := make([]float64, rand.Int()%64)
 	for i := range values {
@@ -111,10 +104,10 @@ func testRandItem(t *testing.T) {
 		}
 		for _, i := range setValues {
 			if item.GetField(i) != values[i] {
-				t.Fatalf("expected '%v', got '%v'", values[i], item.GetField(i))
+				t.Fatalf("expected '%v', got '%v' for index %d", values[i], item.GetField(i), i)
 			}
 		}
-		fields := item.fields()
+		fields := itemFields(item)
 		for i := 0; i < len(fields); i++ {
 			for _, j := range setValues {
 				if i == j {
@@ -126,8 +119,9 @@ func testRandItem(t *testing.T) {
 			}
 		}
 		weight, points := item.WeightAndPoints()
-		if weight != len(fields)*8+len(key)+points*16 {
-			t.Fatalf("expected '%v', got '%v'", len(fields)*8+len(key)+points*16, weight)
+		if weight != item.fieldsDataSize()+len(key)+points*16 {
+			t.Fatalf("expected '%v', got '%v'",
+				item.fieldsDataSize()+len(key)+points*16, weight)
 		}
 		if points != 1 {
 			t.Fatalf("expected '%v', got '%v'", 1, points)
@@ -167,8 +161,11 @@ func testRandItem(t *testing.T) {
 		fvalues = append(fvalues, value)
 		return true
 	})
+	for len(fvalues) < len(values) {
+		fvalues = append(fvalues, 0)
+	}
 	if !floatsEquals(values, fvalues) {
-		t.Fatalf("expected '%v', got '%v'", 1, len(fvalues))
+		t.Fatalf("expected true")
 	}
 
 	// should not fail, must allow nil receiver
@@ -185,25 +182,25 @@ func testRandItem(t *testing.T) {
 	}
 	item.CopyOverFields(values)
 	weight, points := item.WeightAndPoints()
-	if weight != len(values)*8+len(key)+points*16 {
-		t.Fatalf("expected '%v', got '%v'", len(values)*8+len(key)+points*16, weight)
+	if weight != item.fieldsDataSize()+len(key)+points*16 {
+		t.Fatalf("expected '%v', got '%v'", item.fieldsDataSize()+len(key)+points*16, weight)
 	}
 	if points != 1 {
 		t.Fatalf("expected '%v', got '%v'", 1, points)
 	}
-	if !floatsEquals(item.fields(), values) {
-		t.Fatalf("expected '%v', got '%v'", values, item.fields())
+	if !floatsEquals(itemFields(item), values) {
+		t.Fatalf("expected '%v', got '%v'", values, itemFields(item))
 	}
 	item.CopyOverFields(item)
 	weight, points = item.WeightAndPoints()
-	if weight != len(values)*8+len(key)+points*16 {
-		t.Fatalf("expected '%v', got '%v'", len(values)*8+len(key)+points*16, weight)
+	if weight != item.fieldsDataSize()+len(key)+points*16 {
+		t.Fatalf("expected '%v', got '%v'", item.fieldsDataSize()+len(key)+points*16, weight)
 	}
 	if points != 1 {
 		t.Fatalf("expected '%v', got '%v'", 1, points)
 	}
-	if !floatsEquals(item.fields(), values) {
-		t.Fatalf("expected '%v', got '%v'", values, item.fields())
+	if !floatsEquals(itemFields(item), values) {
+		t.Fatalf("expected '%v', got '%v'", values, itemFields(item))
 	}
 	if len(values) > 0 && !item.HasFields() {
 		t.Fatal("expected true")
@@ -217,8 +214,8 @@ func testRandItem(t *testing.T) {
 	if points != 1 {
 		t.Fatalf("expected '%v', got '%v'", 1, points)
 	}
-	if len(item.fields()) != 0 {
-		t.Fatalf("expected '%#v', got '%#v'", 0, len(item.fields()))
+	if len(itemFields(item)) != 0 {
+		t.Fatalf("expected '%#v', got '%#v'", 0, len(itemFields(item)))
 	}
 	if item.ID() != key {
 		t.Fatalf("expected '%v', got '%v'", key, item.ID())
@@ -229,7 +226,20 @@ func testRandItem(t *testing.T) {
 
 }
 
+func itemFields(item *Item) []float64 {
+	var values []float64
+	item.ForEachField(-1, func(value float64) bool {
+		values = append(values, value)
+		return true
+	})
+	return values
+}
+
 func TestItem(t *testing.T) {
+	seed := time.Now().UnixNano()
+	seed = 1550371581595971000
+	println("TestItem seed", seed)
+	rand.Seed(seed)
 	start := time.Now()
 	for time.Since(start) < time.Second/2 {
 		testRandItem(t)

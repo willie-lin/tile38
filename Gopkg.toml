@@ -23,7 +23,8 @@
 required = [
   "github.com/tidwall/lotsa", 
   "github.com/mmcloughlin/geohash", 
-  "github.com/tidwall/evio"
+  "github.com/tidwall/evio",
+  "github.com/h2so5/half"
 ]
 
 [[constraint]]
@@ -72,7 +73,7 @@ required = [
 
 [[constraint]]
   name = "github.com/tidwall/gjson"
-  version = "1.0.1"
+  version = "1.2.1"
 
 [[constraint]]
   branch = "master"

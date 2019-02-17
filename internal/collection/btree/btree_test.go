@@ -111,7 +111,7 @@ func TestDescend(t *testing.T) {
 	var keys []string
 	for i := 0; i < 1000; i += 10 {
 		keys = append(keys, fmt.Sprintf("%03d", i))
-		tr.Set(item.New(keys[len(keys)-1], nil))
+		tr.Set(item.New(keys[len(keys)-1], nil, false))
 	}
 	var exp []string
 	tr.Reverse(func(item *item.Item) bool {
@@ -162,7 +162,7 @@ func TestAscend(t *testing.T) {
 	var keys []string
 	for i := 0; i < 1000; i += 10 {
 		keys = append(keys, fmt.Sprintf("%03d", i))
-		tr.Set(item.New(keys[len(keys)-1], nil))
+		tr.Set(item.New(keys[len(keys)-1], nil, false))
 	}
 	exp := keys
 	for i := -1; i < 1000; i++ {
@@ -205,7 +205,7 @@ func TestBTree(t *testing.T) {
 
 	// insert all items
 	for _, key := range keys {
-		value, replaced := tr.Set(item.New(key, testString(key)))
+		value, replaced := tr.Set(item.New(key, testString(key), false))
 		if replaced {
 			t.Fatal("expected false")
 		}
@@ -362,7 +362,7 @@ func TestBTree(t *testing.T) {
 
 	// replace second half
 	for _, key := range keys[len(keys)/2:] {
-		value, replaced := tr.Set(item.New(key, testString(key)))
+		value, replaced := tr.Set(item.New(key, testString(key), false))
 		if !replaced {
 			t.Fatal("expected true")
 		}
@@ -420,7 +420,7 @@ func BenchmarkTidwallSequentialSet(b *testing.B) {
 	sort.Strings(keys)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		tr.Set(item.New(keys[i], nil))
+		tr.Set(item.New(keys[i], nil, false))
 	}
 }
 
@@ -429,7 +429,7 @@ func BenchmarkTidwallSequentialGet(b *testing.B) {
 	keys := randKeys(b.N)
 	sort.Strings(keys)
 	for i := 0; i < b.N; i++ {
-		tr.Set(item.New(keys[i], nil))
+		tr.Set(item.New(keys[i], nil, false))
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -442,7 +442,7 @@ func BenchmarkTidwallRandomSet(b *testing.B) {
 	keys := randKeys(b.N)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		tr.Set(item.New(keys[i], nil))
+		tr.Set(item.New(keys[i], nil, false))
 	}
 }
 
@@ -450,7 +450,7 @@ func BenchmarkTidwallRandomGet(b *testing.B) {
 	var tr BTree
 	keys := randKeys(b.N)
 	for i := 0; i < b.N; i++ {
-		tr.Set(item.New(keys[i], nil))
+		tr.Set(item.New(keys[i], nil, false))
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -528,11 +528,11 @@ func BenchmarkTidwallRandomGet(b *testing.B) {
 
 func TestBTreeOne(t *testing.T) {
 	var tr BTree
-	tr.Set(item.New("1", testString("1")))
+	tr.Set(item.New("1", testString("1"), false))
 	tr.Delete("1")
-	tr.Set(item.New("1", testString("1")))
+	tr.Set(item.New("1", testString("1"), false))
 	tr.Delete("1")
-	tr.Set(item.New("1", testString("1")))
+	tr.Set(item.New("1", testString("1"), false))
 	tr.Delete("1")
 }
 
@@ -541,7 +541,7 @@ func TestBTree256(t *testing.T) {
 	var n int
 	for j := 0; j < 2; j++ {
 		for _, i := range rand.Perm(256) {
-			tr.Set(item.New(fmt.Sprintf("%d", i), testString(fmt.Sprintf("%d", i))))
+			tr.Set(item.New(fmt.Sprintf("%d", i), testString(fmt.Sprintf("%d", i)), false))
 			n++
 			if tr.Len() != n {
 				t.Fatalf("expected 256, got %d", n)
