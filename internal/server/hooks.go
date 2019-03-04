@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/tidwall/buntdb"
+	"github.com/tidwall/gjson"
 	"github.com/tidwall/resp"
 	"github.com/tidwall/tile38/internal/endpoint"
 	"github.com/tidwall/tile38/internal/glob"
@@ -597,8 +598,11 @@ func (h *Hook) proc() (ok bool) {
 		err := tx.AscendGreaterOrEqual("hooks",
 			h.query, func(key, val string) bool {
 				if strings.HasPrefix(key, hookLogPrefix) {
-					keys = append(keys, key)
-					vals = append(vals, val)
+					// Verify this hooks name matches the one in the notif
+					if h.Name == gjson.Get(val, "hook").String() {
+						keys = append(keys, key)
+						vals = append(vals, val)
+					}
 				}
 				return true
 			},

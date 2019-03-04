@@ -1,6 +1,8 @@
 package tests
 
 import (
+	"fmt"
+	"sort"
 	"testing"
 )
 
@@ -15,6 +17,7 @@ func subTestSearch(t *testing.T, mc *mockServer) {
 	runStep(t, mc, "INTERSECTS_CURSOR", keys_INTERSECTS_CURSOR_test)
 	runStep(t, mc, "SCAN_CURSOR", keys_SCAN_CURSOR_test)
 	runStep(t, mc, "SEARCH_CURSOR", keys_SEARCH_CURSOR_test)
+	runStep(t, mc, "MATCH", keys_MATCH_test)
 }
 
 func keys_KNN_test(mc *mockServer) error {
@@ -34,7 +37,7 @@ func keys_KNN_test(mc *mockServer) error {
 func keys_KNN_cursor_test(mc *mockServer) error {
 	return mc.DoBatch([][]interface{}{
 		{"SET", "mykey", "1", "FIELD", "foo", 5.5, "POINT", 5, 5}, {"OK"},
-		{"SET", "mykey", "2", "FIELD", "foo", 19.19, "POINT",19, 19}, {"OK"},
+		{"SET", "mykey", "2", "FIELD", "foo", 19.19, "POINT", 19, 19}, {"OK"},
 		{"SET", "mykey", "3", "FIELD", "foo", 12.19, "POINT", 12, 19}, {"OK"},
 		{"SET", "mykey", "4", "FIELD", "foo", -5.5, "POINT", -5, 5}, {"OK"},
 		{"SET", "mykey", "5", "FIELD", "foo", 13.21, "POINT", 33, 21}, {"OK"},
@@ -118,7 +121,7 @@ func keys_WITHIN_CURSOR_test(mc *mockServer) error {
 		{"SET", "mykey", "point2", "FIELD", "foo", 2, "POINT", 37.7335, -122.44121}, {"OK"},
 		{"SET", "mykey", "line3", "FIELD", "foo", 3, "OBJECT", `{"type":"LineString","coordinates":[[-122.4408378,37.7341129],[-122.4408378,37.733]]}`}, {"OK"},
 		{"SET", "mykey", "poly4", "FIELD", "foo", 4, "OBJECT", `{"type":"Polygon","coordinates":[[[-122.4408378,37.7341129],[-122.4408378,37.733],[-122.44,37.733],[-122.44,37.7341129],[-122.4408378,37.7341129]]]}`}, {"OK"},
-		{"SET", "mykey", "multipoly5","FIELD", "foo", 5,  "OBJECT", `{"type":"MultiPolygon","coordinates":[[[[-122.4408378,37.7341129],[-122.4408378,37.733],[-122.44,37.733],[-122.44,37.7341129],[-122.4408378,37.7341129]]],[[[-122.44091033935547,37.731981251280985],[-122.43994474411011,37.731981251280985],[-122.43994474411011,37.73254976045042],[-122.44091033935547,37.73254976045042],[-122.44091033935547,37.731981251280985]]]]}`}, {"OK"},
+		{"SET", "mykey", "multipoly5", "FIELD", "foo", 5, "OBJECT", `{"type":"MultiPolygon","coordinates":[[[[-122.4408378,37.7341129],[-122.4408378,37.733],[-122.44,37.733],[-122.44,37.7341129],[-122.4408378,37.7341129]]],[[[-122.44091033935547,37.731981251280985],[-122.43994474411011,37.731981251280985],[-122.43994474411011,37.73254976045042],[-122.44091033935547,37.73254976045042],[-122.44091033935547,37.731981251280985]]]]}`}, {"OK"},
 		{"SET", "mykey", "point6", "FIELD", "foo", 6, "POINT", -5, 5}, {"OK"},
 		{"SET", "mykey", "point7", "FIELD", "foo", 7, "POINT", 33, 21}, {"OK"},
 		{"SET", "mykey", "poly8", "FIELD", "foo", 8, "OBJECT", `{"type":"Polygon","coordinates":[[[-122.4408378,37.7341129],[-122.4408378,37.733],[-122.44,37.733],[-122.44,37.7341129],[-122.4408378,37.7341129]],[[-122.44060993194579,37.73345766902749],[-122.44044363498686,37.73345766902749],[-122.44044363498686,37.73355524732416],[-122.44060993194579,37.73355524732416],[-122.44060993194579,37.73345766902749]],[[-122.44060724973677,37.7336888869566],[-122.4402102828026,37.7336888869566],[-122.4402102828026,37.7339752567853],[-122.44060724973677,37.7339752567853],[-122.44060724973677,37.7336888869566]]]}`}, {"OK"},
@@ -301,4 +304,64 @@ func keys_SEARCH_CURSOR_test(mc *mockServer) error {
 			"[8 [id8]]"},
 		{"SEARCH", "mykey", "LIMIT", 3, "DESC", "IDS"}, {"[3 [id9 id8 id7]]"},
 	})
+}
+
+func keys_MATCH_test(mc *mockServer) error {
+	return mc.DoBatch([][]interface{}{
+		{"SET", "fleet", "truck1", "POINT", "33.0001", "-112.0001"}, {"OK"},
+		{"SET", "fleet", "truck2", "POINT", "33.0002", "-112.0002"}, {"OK"},
+		{"SET", "fleet", "luck1", "POINT", "33.0003", "-112.0003"}, {"OK"},
+		{"SET", "fleet", "luck2", "POINT", "33.0004", "-112.0004"}, {"OK"},
+
+		{"SCAN", "fleet", "IDS"}, {"[0 [luck1 luck2 truck1 truck2]]"},
+		{"SCAN", "fleet", "MATCH", "*", "IDS"}, {"[0 [luck1 luck2 truck1 truck2]]"},
+		{"SCAN", "fleet", "MATCH", "truck*", "IDS"}, {"[0 [truck1 truck2]]"},
+		{"SCAN", "fleet", "MATCH", "luck*", "IDS"}, {"[0 [luck1 luck2]]"},
+		{"SCAN", "fleet", "MATCH", "*2", "IDS"}, {"[0 [luck2 truck2]]"},
+		{"SCAN", "fleet", "MATCH", "*2*", "IDS"}, {"[0 [luck2 truck2]]"},
+		{"SCAN", "fleet", "MATCH", "*u*", "IDS"}, {"[0 [luck1 luck2 truck1 truck2]]"},
+
+		{"NEARBY", "fleet", "IDS", "POINT", 33.00005, -112.00005, 100000}, {
+			match("[0 [luck1 luck2 truck1 truck2]]"),
+		},
+		{"NEARBY", "fleet", "MATCH", "*", "IDS", "POINT", 33.00005, -112.00005, 100000}, {
+			match("[0 [luck1 luck2 truck1 truck2]]"),
+		},
+		{"NEARBY", "fleet", "MATCH", "t*", "IDS", "POINT", 33.00005, -112.00005, 100000}, {
+			match("[0 [truck1 truck2]]"),
+		},
+		{"NEARBY", "fleet", "MATCH", "t*2", "IDS", "POINT", 33.00005, -112.00005, 100000}, {
+			match("[0 [truck2]]"),
+		},
+		{"NEARBY", "fleet", "MATCH", "*2", "IDS", "POINT", 33.00005, -112.00005, 100000}, {
+			match("[0 [luck2 truck2]]"),
+		},
+
+		{"INTERSECTS", "fleet", "IDS", "BOUNDS", 33, -113, 34, -112}, {
+			match("[0 [luck1 luck2 truck1 truck2]]"),
+		},
+		{"INTERSECTS", "fleet", "MATCH", "*", "IDS", "BOUNDS", 33, -113, 34, -112}, {
+			match("[0 [luck1 luck2 truck1 truck2]]"),
+		},
+		{"INTERSECTS", "fleet", "MATCH", "t*", "IDS", "BOUNDS", 33, -113, 34, -112}, {
+			match("[0 [truck1 truck2]]"),
+		},
+		{"INTERSECTS", "fleet", "MATCH", "t*2", "IDS", "BOUNDS", 33, -113, 34, -112}, {
+			match("[0 [truck2]]"),
+		},
+		{"INTERSECTS", "fleet", "MATCH", "*2", "IDS", "BOUNDS", 33, -113, 34, -112}, {
+			match("[0 [luck2 truck2]]"),
+		},
+	})
+}
+
+// match sorts the response and compares to the expected input
+func match(expectIn string) func(org, v interface{}) (resp, expect interface{}) {
+	return func(v, org interface{}) (resp, expect interface{}) {
+		sort.Slice(org.([]interface{})[1], func(i, j int) bool {
+			return org.([]interface{})[1].([]interface{})[i].(string) <
+				org.([]interface{})[1].([]interface{})[j].(string)
+		})
+		return fmt.Sprintf("%v", org), expectIn
+	}
 }

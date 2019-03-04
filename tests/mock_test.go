@@ -226,11 +226,23 @@ func (mc *mockServer) DoExpect(expect interface{}, commandName string, args ...i
 			resp = string([]byte(b))
 		}
 	}
-	if fn, ok := expect.(func(v, org interface{}) (resp, expect interface{})); ok {
-		resp, expect = fn(resp, oresp)
-	}
-	if fn, ok := expect.(func(v interface{}) (resp, expect interface{})); ok {
-		resp, expect = fn(resp)
+	err = func() (err error) {
+		defer func() {
+			v := recover()
+			if v != nil {
+				err = fmt.Errorf("panic '%v'", v)
+			}
+		}()
+		if fn, ok := expect.(func(v, org interface{}) (resp, expect interface{})); ok {
+			resp, expect = fn(resp, oresp)
+		}
+		if fn, ok := expect.(func(v interface{}) (resp, expect interface{})); ok {
+			resp, expect = fn(resp)
+		}
+		return nil
+	}()
+	if err != nil {
+		return err
 	}
 	if fmt.Sprintf("%v", resp) != fmt.Sprintf("%v", expect) {
 		return fmt.Errorf("expected '%v', got '%v'", expect, resp)

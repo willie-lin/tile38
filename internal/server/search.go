@@ -422,7 +422,7 @@ func (server *Server) nearestNeighbors(
 			if server.hasExpired(s.key, id) {
 				return true
 			}
-			ok, keepGoing, _ := sw.testObject(id, o, fields, true)
+			ok, keepGoing, _ := sw.testObject(id, o, fields, false)
 			if !ok {
 				return true
 			}

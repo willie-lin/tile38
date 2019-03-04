@@ -2,6 +2,23 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [1.16.1] - 2019-03-01
+### Fixes
+- #421: Nearby with MATCH is returning invalid results (@nithinkota)
+
+## [1.16.0] - 2019-02-25
+### Fixes
+- #415: Fix overlapping geofences sending notifcation to wrong endpoint. (@belek, @s32x)
+- #412: Allow SERVER command for Lua scripts (@1995parham)
+- #410: Allow slashes in MQTT Topics (@pstuifzand)
+- #409: Fixed bug in polygon clipping. (@rshura)
+- 30f903b: Require properties member for geojson features. (@rshura)
+
+### Added
+- #409: Added TEST command for executing WITHIN and INTERSECTS on two objects. (@rshura)
+- #407: Allow 201 & 202 status code on webhooks. (@s32x)
+- #404: Adding more replication data to INFO response. (@s32x)
+
 ## [1.15.0] - 2019-01-16
 ### Fixes
 - #403: JSON Output for INFO and CLIENT (@s32x)
