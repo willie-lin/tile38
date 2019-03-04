@@ -42,12 +42,27 @@ var (
 // TODO: Set to false in 2.*
 var httpTransport = true
 
+////////////////////////////////////////////////////////////////////////////////
+//
 // Fire up a webhook test server by using the --webhook-http-consumer-port
 // for example
 //   $ ./tile38-server --webhook-http-consumer-port 9999
 //
 // The create hooks like such...
 //   SETHOOK myhook http://localhost:9999/myhook NEARBY mykey FENCE POINT 33.5 -115.5 1000
+//
+////////////////////////////////////////////////////////////////////////////////
+//
+// Memory profiling - start the server with the -pprofport flag
+//
+//   $ ./tile38-server -pprofport 6060
+//
+// Then, at any point, from a different terminal execute:
+//   $ go tool pprof -svg http://localhost:6060/debug/pprof/heap > out.svg
+//
+// Load the SVG into a web browser to visualize the memory usage
+//
+////////////////////////////////////////////////////////////////////////////////
 
 type hserver struct{}
 
