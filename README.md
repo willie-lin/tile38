@@ -254,9 +254,9 @@ A bounding box consists of two points. The first being the southwestern most poi
 set fleet truck1 bounds 30 -110 40 -100
 ```
 #### Geohash
-A [geohash](https://en.wikipedia.org/wiki/Geohash) is a string respresentation of a point. With the length of the string indicating the precision of the point. 
+A [geohash](https://en.wikipedia.org/wiki/Geohash) is a string representation of a point. With the length of the string indicating the precision of the point. 
 ```
-set fleet truck1 hash 9tbnthxzr # this would be equivlent to 'point 33.5123 -112.2693'
+set fleet truck1 hash 9tbnthxzr # this would be equivalent to 'point 33.5123 -112.2693'
 ```
 
 #### GeoJSON
@@ -272,7 +272,7 @@ set city tempe object {"type":"Polygon","coordinates":[[[0,0],[10,10],[10,0],[0,
 
 #### XYZ Tile
 An XYZ tile is rectangle bounding area on earth that is represented by an X, Y coordinate and a Z (zoom) level.
-Check out [maptiler.org](https://www.maptiler.org/google-maps-coordinates-tile-bounds-projection/) for an interactive example.
+Check out [maptiler.org](http://www.maptiler.org/google-maps-coordinates-tile-bounds-projection/) for an interactive example.
 
 #### QuadKey
 A QuadKey used the same coordinate system as an XYZ tile except that the string representation is a string characters composed of 0, 1, 2, or 3. For a detailed explanation checkout [The Bing Maps Tile System](https://msdn.microsoft.com/en-us/library/bb259689.aspx).

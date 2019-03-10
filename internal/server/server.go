@@ -785,6 +785,7 @@ func (server *Server) watchLuaStatePool() {
 	}
 }
 
+// backgroundSyncAOF ensures that the aof buffer is does not grow too big.
 func (server *Server) backgroundSyncAOF() {
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
@@ -792,12 +793,14 @@ func (server *Server) backgroundSyncAOF() {
 		if server.stopServer.on() {
 			return
 		}
-		server.mu.Lock()
-		if len(server.aofbuf) > 0 {
-			server.flushAOF(true)
-		}
-		server.aofbuf = nil
-		server.mu.Unlock()
+		func() {
+			server.mu.Lock()
+			defer server.mu.Unlock()
+			if len(server.aofbuf) > 0 {
+				server.flushAOF(true)
+			}
+			server.aofbuf = nil
+		}()
 	}
 }
 
