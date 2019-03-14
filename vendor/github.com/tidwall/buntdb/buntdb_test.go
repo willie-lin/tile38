@@ -1021,6 +1021,46 @@ func TestVariousTx(t *testing.T) {
 	}
 }
 
+func TestNearby(t *testing.T) {
+	rand.Seed(time.Now().UnixNano())
+	N := 100000
+	db, _ := Open(":memory:")
+	db.CreateSpatialIndex("points", "*", IndexRect)
+	db.Update(func(tx *Tx) error {
+		for i := 0; i < N; i++ {
+			p := Point(
+				rand.Float64()*100,
+				rand.Float64()*100,
+				rand.Float64()*100,
+				rand.Float64()*100,
+			)
+			tx.Set(fmt.Sprintf("p:%d", i), p, nil)
+		}
+		return nil
+	})
+	var keys, values []string
+	var dists []float64
+	var pdist float64
+	var i int
+	db.View(func(tx *Tx) error {
+		tx.Nearby("points", Point(0, 0, 0, 0), func(key, value string, dist float64) bool {
+			if i != 0 && dist < pdist {
+				t.Fatal("out of order")
+			}
+			keys = append(keys, key)
+			values = append(values, value)
+			dists = append(dists, dist)
+			pdist = dist
+			i++
+			return true
+		})
+		return nil
+	})
+	if len(keys) != N {
+		t.Fatalf("expected '%v', got '%v'", N, len(keys))
+	}
+}
+
 func Example_descKeys() {
 	db, _ := Open(":memory:")
 	db.CreateIndex("name", "*", IndexString)
@@ -2509,5 +2549,100 @@ func TestJSONIndex(t *testing.T) {
 	expect := "3,4,1,2,5,6,3,4,5,1,2,6,5,4,1,2,3,6,1,4,6,2,3,5"
 	if strings.Join(keys, ",") != expect {
 		t.Fatalf("expected %v, got %v", expect, strings.Join(keys, ","))
+	}
+}
+
+func TestOnExpiredSync(t *testing.T) {
+	db := testOpen(t)
+	defer testClose(db)
+
+	var config Config
+	if err := db.ReadConfig(&config); err != nil {
+		t.Fatal(err)
+	}
+	hits := make(chan int, 3)
+	config.OnExpiredSync = func(key, value string, tx *Tx) error {
+		n, err := strconv.Atoi(value)
+		if err != nil {
+			return err
+		}
+		defer func() { hits <- n }()
+		if n >= 2 {
+			_, err = tx.Delete(key)
+			if err != ErrNotFound {
+				return err
+			}
+			return nil
+		}
+		n++
+		_, _, err = tx.Set(key, strconv.Itoa(n), &SetOptions{Expires: true, TTL: time.Millisecond * 100})
+		return err
+	}
+	if err := db.SetConfig(config); err != nil {
+		t.Fatal(err)
+	}
+	err := db.Update(func(tx *Tx) error {
+		_, _, err := tx.Set("K", "0", &SetOptions{Expires: true, TTL: time.Millisecond * 100})
+		return err
+	})
+	if err != nil {
+		t.Fail()
+	}
+
+	done := make(chan struct{})
+	go func() {
+		ticks := time.NewTicker(time.Millisecond * 50)
+		defer ticks.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticks.C:
+				err := db.View(func(tx *Tx) error {
+					v, err := tx.Get("K", true)
+					if err != nil {
+						return err
+					}
+					n, err := strconv.Atoi(v)
+					if err != nil {
+						return err
+					}
+					if n < 0 || n > 2 {
+						t.Fail()
+					}
+					return nil
+				})
+				if err != nil {
+					t.Fail()
+				}
+			}
+		}
+	}()
+
+OUTER1:
+	for {
+		select {
+		case <-time.After(time.Second * 2):
+			t.Fail()
+		case v := <-hits:
+			if v >= 2 {
+				break OUTER1
+			}
+		}
+	}
+	err = db.View(func(tx *Tx) error {
+		defer close(done)
+		v, err := tx.Get("K")
+		if err != nil {
+			t.Fail()
+			return err
+		}
+		if v != "2" {
+			t.Fail()
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fail()
 	}
 }
