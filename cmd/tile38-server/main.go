@@ -374,23 +374,25 @@ Developer Options:
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	go func() {
-		s := <-c
-		log.Warnf("signal: %v", s)
-		if pidfile != "" {
-			pidcleanup()
-		}
-		pprofcleanup()
-		switch {
-		default:
-			os.Exit(-1)
-		case s == syscall.SIGHUP:
-			os.Exit(1)
-		case s == syscall.SIGINT:
-			os.Exit(2)
-		case s == syscall.SIGQUIT:
-			os.Exit(3)
-		case s == syscall.SIGTERM:
-			os.Exit(0xf)
+		for s := range c {
+			if s == syscall.SIGHUP {
+				continue
+			}
+			log.Warnf("signal: %v", s)
+			if pidfile != "" {
+				pidcleanup()
+			}
+			pprofcleanup()
+			switch {
+			default:
+				os.Exit(-1)
+			case s == syscall.SIGINT:
+				os.Exit(2)
+			case s == syscall.SIGQUIT:
+				os.Exit(3)
+			case s == syscall.SIGTERM:
+				os.Exit(0xf)
+			}
 		}
 	}()
 

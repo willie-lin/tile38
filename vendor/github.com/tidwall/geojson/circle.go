@@ -99,6 +99,8 @@ func (g *Circle) Contains(obj Object) bool {
 	switch other := obj.(type) {
 	case *Point:
 		return g.containsPoint(other.Center())
+	case *SimplePoint:
+		return g.containsPoint(other.Center())
 	case *Circle:
 		return other.Distance(g) < (other.meters + g.meters)
 	case *LineString:
@@ -244,8 +246,8 @@ func makeCircleObject(center geometry.Point, meters float64, steps int) Object {
 	// generate the
 	for th := 0.0; th <= 360.0; th += 360.0 / float64(steps) {
 		radians := (math.Pi / 180) * th
-		x := center.X + lats*math.Cos(radians)
-		y := center.Y + lons*math.Sin(radians)
+		x := center.X + lons*math.Cos(radians)
+		y := center.Y + lats*math.Sin(radians)
 		points = append(points, geometry.Point{X: x, Y: y})
 	}
 	// add last connecting point, make a total of steps+1

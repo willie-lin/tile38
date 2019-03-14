@@ -2,6 +2,13 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [1.16.2] - 2019-03-12
+### Fixes
+- #432: Ignore SIGHUP signals (@abhit011)
+- #433: Fixed nearby inaccuracy with geofence (@stcktrce)
+- #429: Memory optimization, recycle AOF buffer
+- 95a5556: Added periodic yielding to iterators (@rshura)
+
 ## [1.16.1] - 2019-03-01
 ### Fixes
 - #421: Nearby with MATCH is returning invalid results (@nithinkota)
