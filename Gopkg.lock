@@ -231,12 +231,12 @@
   revision = "9876f1454cf0993a53d74c27196993e345f50dd1"
 
 [[projects]]
-  branch = "master"
   digest = "1:4d2ec831fbaaf74fd75d2d9fe107e605c92489ec6cef6d36e1f23b678e9f2bd4"
   name = "github.com/tidwall/buntdb"
   packages = ["."]
   pruneopts = ""
   revision = "6249481c29c2cd96f53b691b74ac1893f72774c2"
+  version = "v1.1.0"
 
 [[projects]]
   digest = "1:91acf4d86b348c1f1832336836035373b047ffcb16a0fde066bd531bbe3452b2"
@@ -327,11 +327,14 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:9384bff0cadcd196d5981923a738898c36d4ce049781152b9a9816791c8221b4"
+  digest = "1:5d9d865e55b95f001e52a7f5d1f812e8a80f0f05d5b04ede006f24206ebba33c"
   name = "github.com/tidwall/rtree"
-  packages = ["."]
+  packages = [
+    ".",
+    "base",
+  ]
   pruneopts = ""
-  revision = "d4a8a3d30d5729f85edfba1745241f3a621d0359"
+  revision = "6cd427091e0e662cb4f8e2c9eb1a41e1c46ff0d3"
 
 [[projects]]
   digest = "1:ca969d3e75ed5b3003f4f5864bb5c13d99471ef57f9049bf78562d7ee1ac019c"
@@ -348,6 +351,14 @@
   packages = ["."]
   pruneopts = ""
   revision = "de5932d649b50053050d43056146b960f3d90ca5"
+
+[[projects]]
+  branch = "master"
+  digest = "1:9d6562efe571b54b2ec08ed598e4ba08d77b966dc2103a4300ae0cd0286dd6c3"
+  name = "github.com/tidwall/tinyqueue"
+  packages = ["."]
+  pruneopts = ""
+  revision = "1e39f55115634cad2c504631c8bfcc292f2c9c55"
 
 [[projects]]
   branch = "master"

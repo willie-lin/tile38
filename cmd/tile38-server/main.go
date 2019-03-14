@@ -313,6 +313,21 @@ Developer Options:
 		log.Debug("memprofile active")
 	}
 
+	// pprof
+	if cpuprofile != "" {
+		log.Debugf("cpuprofile active")
+		f, err := os.Create(cpuprofile)
+		if err != nil {
+			log.Fatal("could not create CPU profile: ", err)
+		}
+		if err := pprof.StartCPUProfile(f); err != nil {
+			log.Fatal("could not start CPU profile: ", err)
+		}
+	}
+	if memprofile != "" {
+		log.Debug("memprofile active")
+	}
+
 	var pprofcleanedup bool
 	var pprofcleanupMu sync.Mutex
 	pprofcleanup := func() {
@@ -352,16 +367,18 @@ Developer Options:
 	var pidcleanedup bool
 	var pidcleanupMu sync.Mutex
 	pidcleanup := func() {
-		pidcleanupMu.Lock()
-		defer pidcleanupMu.Unlock()
-		if pidcleanedup {
-			return
-		}
-		// cleanup code
 		if pidfile != "" {
-			os.Remove(pidfile)
+			pidcleanupMu.Lock()
+			defer pidcleanupMu.Unlock()
+			if pidcleanedup {
+				return
+			}
+			// cleanup code
+			if pidfile != "" {
+				os.Remove(pidfile)
+			}
+			pidcleanedup = true
 		}
-		pidcleanedup = true
 	}
 	defer pidcleanup()
 	if pidfile != "" {
@@ -379,9 +396,7 @@ Developer Options:
 				continue
 			}
 			log.Warnf("signal: %v", s)
-			if pidfile != "" {
-				pidcleanup()
-			}
+			pidcleanup()
 			pprofcleanup()
 			switch {
 			default:
