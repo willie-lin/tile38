@@ -26,8 +26,9 @@ jobs:
     - name: Test
       run: make test
 
-    # - name: Test
-    #   run: ./scripts/test.sh
-
-    # - name: Build
-    #   run: make tile38-server
+    - name: Docker push
+      env:
+        DOCKER_LOGIN: tidwall
+        DOCKER_USER: tile38
+        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+      run: ./scripts/docker-push.sh
