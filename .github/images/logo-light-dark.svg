@@ -7,7 +7,7 @@
     .three-eight-join { fill: #3d1214 }
     .three-three-join { fill: #244662 }
     @media (prefers-color-scheme: dark) {
-      .tile { stroke: #ffffff }
+      .tile { stroke: black }
       .three { stroke: #60869f }
       .eight { stroke: #a32121 }
       .eight-eight-join { fill: #d94d53 }
