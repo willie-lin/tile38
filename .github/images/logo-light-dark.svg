@@ -1,4 +1,5 @@
 <svg fill="none" viewBox="0 0 2458 804" width="2458" height="804" xmlns="http://www.w3.org/2000/svg">
+  
   <style>
     .tile { stroke: #222222 }
     .three { stroke: #60869f }
@@ -94,4 +95,5 @@
       class="three-three-join" />
     <circle cx="179" cy="338.5" r="33.5" class="three-three-join" />
   </g>
+
 </svg>
