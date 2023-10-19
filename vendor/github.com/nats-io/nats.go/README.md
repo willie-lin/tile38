@@ -1,10 +1,18 @@
 # NATS - Go Client
 A [Go](http://golang.org) client for the [NATS messaging system](https://nats.io).
 
-[![License Apache 2](https://img.shields.io/badge/License-Apache2-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
-[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fnats-io%2Fgo-nats.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2Fnats-io%2Fgo-nats?ref=badge_shield)
-[![Go Report Card](https://goreportcard.com/badge/github.com/nats-io/nats.go)](https://goreportcard.com/report/github.com/nats-io/nats.go) [![Build Status](https://travis-ci.com/nats-io/nats.go.svg?branch=master)](http://travis-ci.com/nats-io/nats.go) [![GoDoc](https://img.shields.io/badge/GoDoc-reference-007d9c)](https://pkg.go.dev/github.com/nats-io/nats.go)
- [![Coverage Status](https://coveralls.io/repos/nats-io/nats.go/badge.svg?branch=master)](https://coveralls.io/r/nats-io/nats.go?branch=master)
+[![License Apache 2][License-Image]][License-Url] [![Go Report Card][ReportCard-Image]][ReportCard-Url] [![Build Status][Build-Status-Image]][Build-Status-Url] [![GoDoc][GoDoc-Image]][GoDoc-Url] [![Coverage Status][Coverage-image]][Coverage-Url]
+
+[License-Url]: https://www.apache.org/licenses/LICENSE-2.0
+[License-Image]: https://img.shields.io/badge/License-Apache2-blue.svg
+[ReportCard-Url]: https://goreportcard.com/report/github.com/nats-io/nats.go
+[ReportCard-Image]: https://goreportcard.com/badge/github.com/nats-io/nats.go
+[Build-Status-Url]: https://travis-ci.com/github/nats-io/nats.go
+[Build-Status-Image]: https://travis-ci.com/nats-io/nats.go.svg?branch=main
+[GoDoc-Url]: https://pkg.go.dev/github.com/nats-io/nats.go
+[GoDoc-Image]: https://img.shields.io/badge/GoDoc-reference-007d9c
+[Coverage-Url]: https://coveralls.io/r/nats-io/nats.go?branch=main
+[Coverage-image]: https://coveralls.io/repos/github/nats-io/nats.go/badge.svg?branch=main
 
 ## Installation
 
@@ -21,7 +29,7 @@ When using or transitioning to Go modules support:
 ```bash
 # Go client latest or explicit version
 go get github.com/nats-io/nats.go/@latest
-go get github.com/nats-io/nats.go/@v1.10.0
+go get github.com/nats-io/nats.go/@v1.28.0
 
 # For latest NATS Server, add /v2 at the end
 go get github.com/nats-io/nats-server/v2
@@ -33,7 +41,7 @@ go get github.com/nats-io/nats-server/v2
 ## Basic Usage
 
 ```go
-import nats "github.com/nats-io/nats.go"
+import "github.com/nats-io/nats.go"
 
 // Connect to a server
 nc, _ := nats.Connect(nats.DefaultURL)
@@ -81,6 +89,48 @@ nc.Drain()
 // Close connection
 nc.Close()
 ```
+
+## JetStream
+
+JetStream is the built-in NATS persistence system. `nats.go` provides a built-in
+API enabling both managing JetStream assets as well as publishing/consuming
+persistent messages.
+
+### Basic usage
+
+```go
+// connect to nats server
+nc, _ := nats.Connect(nats.DefaultURL)
+
+// create jetstream context from nats connection
+js, _ := jetstream.New(nc)
+
+ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+defer cancel()
+
+// get existing stream handle
+stream, _ := js.Stream(ctx, "foo")
+
+// retrieve consumer handle from a stream
+cons, _ := stream.Consumer(ctx, "cons")
+
+// consume messages from the consumer in callback
+cc, _ := cons.Consume(func(msg jetstream.Msg) {
+    fmt.Println("Received jetstream message: ", string(msg.Data()))
+    msg.Ack()
+})
+defer cc.Stop()
+```
+
+To find more information on `nats.go` JetStream API, visit
+[`jetstream/README.md`](jetstream/README.md)
+
+> The current JetStream API replaces the [legacy JetStream API](legacy_jetstream.md)
+
+## Service API
+
+The service API (`micro`) allows you to [easily build NATS services](micro/README.md) The
+services API is currently in beta release.
 
 ## Encoded Connections
 
@@ -278,7 +328,6 @@ nc.Publish("foo.bar.baz", []byte("Hello World"))
 nc.QueueSubscribe("foo", "job_workers", func(_ *Msg) {
   received += 1;
 })
-
 ```
 
 ## Advanced Usage
